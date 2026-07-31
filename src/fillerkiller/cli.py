@@ -33,10 +33,24 @@ def _cmd_sync(args) -> int:
 
 
 def _cmd_dashboard(args) -> int:
+    import socket
+
     import uvicorn
 
     from fillerkiller import config
     from fillerkiller.dashboard.app import create_app
+
+    with socket.socket() as probe:
+        if probe.connect_ex((config.DASHBOARD_HOST, config.DASHBOARD_PORT)) == 0:
+            print(
+                f"error: something is already serving on port {config.DASHBOARD_PORT} — "
+                "probably an old fk dashboard from before an update, which would show "
+                "stale pages.\nStop it first:\n"
+                f"  /usr/sbin/lsof -ti :{config.DASHBOARD_PORT} | xargs kill\n"
+                "then run fk dashboard again.",
+                file=sys.stderr,
+            )
+            return 1
 
     if not args.no_sync:
         try:

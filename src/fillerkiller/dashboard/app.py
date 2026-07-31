@@ -81,12 +81,34 @@ def create_app(db_path: Path | None = None, source_factory=None) -> FastAPI:
             f" (SELECT id FROM meetings WHERE word_count > 0{since})"
             " GROUP BY term ORDER BY n DESC LIMIT 12"
         ).fetchall()
+        def daily(rows):
+            """One point per day: rate weighted by words spoken that day."""
+            agg: dict[str, list[int]] = {}
+            for r in rows:
+                day = r["started_at"][:10]
+                a = agg.setdefault(day, [0, 0, 0])
+                a[0] += r["filler_count"]
+                a[1] += r["word_count"]
+                a[2] += 1
+            return [
+                {"x": day, "y": round(100.0 * f / w, 2), "n": n}
+                for day, (f, w, n) in sorted(agg.items())
+                if w
+            ]
+
+        days = sorted(
+            {m["started_at"][:10] for m in meetings}
+            | {s["started_at"][:10] for s in sessions}
+        )
         chart = {
-            "meetings": [
+            "labels": days,
+            "meetings_daily": daily(meetings),
+            "meetings_points": [
                 {"x": m["started_at"][:10], "y": m["per_100_words"], "title": m["title"]}
                 for m in meetings
             ],
-            "sessions": [
+            "sessions_daily": daily(sessions),
+            "sessions_points": [
                 {"x": s["started_at"][:10], "y": s["per_100_words"],
                  "title": s["label"] or f"Live session {s['id']}"}
                 for s in sessions
