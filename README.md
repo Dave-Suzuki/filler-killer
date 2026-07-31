@@ -57,6 +57,13 @@ macOS will prompt for two permissions for your terminal app:
 (System Settings → Privacy & Security). Zoom and filler-killer can read the
 mic at the same time.
 
+Notes:
+- On-device recognition needs the English dictation model. If `fk listen`
+  warns it's falling back to server recognition, enable Dictation once
+  (System Settings → Keyboard → Dictation) to download the model.
+- Denied a prompt by accident? `tccutil reset SpeechRecognition && tccutil
+  reset Microphone`, then run again.
+
 ## Mac verification checklist
 
 The test suite runs anywhere, but four things can only be verified on your Mac:
