@@ -32,11 +32,15 @@ behind a small interface, so a verbatim engine (e.g. Deepgram with
 ## Setup (macOS)
 
 ```bash
-git clone <this repo> && cd filler-killer
-uv venv && uv pip install -e ".[realtime]"
+git clone https://github.com/davesuzuki-hiya/filler-killer.git
+cd filler-killer
+./install.sh
 ```
 
-(Reflection-only on any OS: `uv pip install -e .`)
+That's it — the script installs [uv](https://docs.astral.sh/uv) if needed, sets
+up everything, and runs `fk doctor`, which checks each prerequisite (Granola
+cache, permissions, on-device speech model) and tells you exactly what to fix
+if anything's missing. Re-run `uv run fk doctor` any time.
 
 ## Use
 

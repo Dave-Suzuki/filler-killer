@@ -65,6 +65,12 @@ def _cmd_listen(args) -> int:
     return run_menubar(label=args.label)
 
 
+def _cmd_doctor(args) -> int:
+    from fillerkiller.doctor import run_doctor
+
+    return run_doctor()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="fk", description="filler-killer")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -78,6 +84,9 @@ def main(argv: list[str] | None = None) -> int:
     p_dash.add_argument("--no-sync", action="store_true", help="skip the Granola sync")
     p_dash.add_argument("--no-browser", action="store_true", help="don't open a browser")
     p_dash.set_defaults(func=_cmd_dashboard)
+
+    p_doctor = sub.add_parser("doctor", help="check setup and say what to fix")
+    p_doctor.set_defaults(func=_cmd_doctor)
 
     p_listen = sub.add_parser("listen", help="real-time filler counter (macOS)")
     p_listen.add_argument("--no-menubar", action="store_true",
