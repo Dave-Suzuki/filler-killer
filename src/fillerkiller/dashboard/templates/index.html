@@ -53,7 +53,7 @@
     {% for s in sessions %}
     <tr>
       <td>{{ s.started_at[:10] }}</td>
-      <td>{{ s.label or "Live session " ~ s.id }}</td>
+      <td><a href="/live/{{ s.id }}">{{ s.label or "Live session " ~ s.id }}</a></td>
       <td class="num">{{ s.word_count }}</td>
       <td class="num">{{ s.filler_count }}</td>
       <td class="num">{{ s.per_100_words }}</td>

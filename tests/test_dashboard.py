@@ -131,3 +131,40 @@ class TestRangesAndRefresh:
         resp = client.post("/sync", follow_redirects=False)
         assert resp.status_code == 303
         assert "sync_error=" in resp.headers["location"]
+
+
+class TestLiveSessionPage:
+    def test_live_page_shows_highlighted_log(self, tmp_path):
+        from fillerkiller.realtime.counter import SessionCounter
+
+        db = tmp_path / "fk.db"
+        conn = connect(db)
+        c = SessionCounter()
+        c.add_final("Um so I think this works")
+        c.add_final("nothing wrong here")
+        sid = c.persist(conn, label="Zoom test")
+        conn.close()
+
+        client = TestClient(create_app(db))
+        resp = client.get(f"/live/{sid}")
+        assert resp.status_code == 200
+        assert "Zoom test" in resp.text
+        assert '<mark class="cat-vocalized" title="um">Um</mark>' in resp.text
+        assert "nothing wrong here" in resp.text
+
+    def test_live_page_404(self, tmp_path):
+        db = tmp_path / "fk.db"
+        connect(db).close()
+        assert TestClient(create_app(db)).get("/live/999").status_code == 404
+
+    def test_index_links_to_live_sessions(self, tmp_path):
+        from fillerkiller.realtime.counter import SessionCounter
+
+        db = tmp_path / "fk.db"
+        conn = connect(db)
+        c = SessionCounter()
+        c.add_final("you know the drill")
+        sid = c.persist(conn, label="Standup")
+        conn.close()
+        text = TestClient(create_app(db)).get("/?range=all").text
+        assert f'href="/live/{sid}"' in text

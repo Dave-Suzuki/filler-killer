@@ -178,4 +178,49 @@ def create_app(db_path: Path | None = None, source_factory=None) -> FastAPI:
             },
         )
 
+    @app.get("/live/{session_id}", response_class=HTMLResponse)
+    def live_session(request: Request, session_id: int):
+        conn = db()
+        s = conn.execute(
+            "SELECT * FROM live_sessions WHERE id = ?", (session_id,)
+        ).fetchone()
+        if s is None:
+            conn.close()
+            raise HTTPException(404, "session not found")
+        segments = conn.execute(
+            "SELECT idx, at, text FROM live_segments WHERE session_id = ? ORDER BY idx",
+            (session_id,),
+        ).fetchall()
+        hits = [
+            dict(r)
+            for r in conn.execute(
+                'SELECT segment_idx, term, category, start, "end" FROM live_hits'
+                " WHERE session_id = ?",
+                (session_id,),
+            )
+        ]
+        conn.close()
+        by_seg: dict[int, list[dict]] = {}
+        for h in hits:
+            by_seg.setdefault(h["segment_idx"], []).append(h)
+        transcript = [
+            {
+                "at": seg["at"][11:19],  # HH:MM:SS
+                "html": highlight(seg["text"], by_seg.get(seg["idx"], [])),
+            }
+            for seg in segments
+        ]
+        term_counts: dict[str, int] = {}
+        for h in hits:
+            term_counts[h["term"]] = term_counts.get(h["term"], 0) + 1
+        return templates.TemplateResponse(
+            request,
+            "live.html",
+            {
+                "s": s,
+                "transcript": transcript,
+                "term_counts": sorted(term_counts.items(), key=lambda kv: -kv[1]),
+            },
+        )
+
     return app

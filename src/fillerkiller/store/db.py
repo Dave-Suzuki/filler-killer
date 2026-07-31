@@ -47,9 +47,27 @@ CREATE TABLE IF NOT EXISTS live_hits (
     session_id INTEGER NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
     term TEXT NOT NULL,
     category TEXT NOT NULL,
-    at TEXT NOT NULL
+    at TEXT NOT NULL,
+    segment_idx INTEGER NOT NULL DEFAULT 0,
+    start INTEGER NOT NULL DEFAULT 0,
+    end INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS live_segments (
+    session_id INTEGER NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
+    idx INTEGER NOT NULL,
+    at TEXT NOT NULL,
+    text TEXT NOT NULL,
+    PRIMARY KEY (session_id, idx)
 );
 """
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Additive migrations for databases created by earlier versions."""
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(live_hits)")}
+    for col in ("segment_idx", "start", "end"):
+        if col not in cols:
+            conn.execute(f'ALTER TABLE live_hits ADD COLUMN "{col}" INTEGER NOT NULL DEFAULT 0')
 
 
 def connect(path: Path | None = None) -> sqlite3.Connection:
@@ -57,4 +75,5 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(_SCHEMA)
+    _migrate(conn)
     return conn
