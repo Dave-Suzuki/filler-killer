@@ -1,5 +1,18 @@
 {% extends "base.html" %}
 {% block content %}
+<div class="toolbar">
+  <nav class="ranges">
+    {% for key, label in range_labels.items() %}
+    <a href="/?range={{ key }}" class="{{ 'active' if key == range else '' }}">{{ label }}</a>
+    {% endfor %}
+  </nav>
+  <form method="post" action="/sync?range={{ range }}">
+    <button type="submit">↻ Refresh from Granola</button>
+  </form>
+</div>
+{% if synced %}<p class="notice">Synced: {{ synced }}</p>{% endif %}
+{% if sync_error %}<p class="notice error">Sync failed: {{ sync_error }}</p>{% endif %}
+
 <div class="cards">
   <div class="card"><div class="num">{{ overall }}</div><div class="lbl">fillers per 100 words (all time)</div></div>
   <div class="card"><div class="num">{{ total_fillers }}</div><div class="lbl">total fillers caught</div></div>

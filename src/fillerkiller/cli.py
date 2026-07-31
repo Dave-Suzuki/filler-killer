@@ -5,30 +5,15 @@ import sys
 import webbrowser
 
 
-def _pick_source(args):
-    """GRANOLA_API_KEY (official API) wins; otherwise the local cache file.
-    --legacy-api forces the old unofficial-API path for pre-encryption installs."""
-    from fillerkiller import config
-
-    if getattr(args, "legacy_api", False):
-        from fillerkiller.granola.api_source import ApiSource
-
-        return ApiSource()
-    if getattr(args, "api", False) or config.granola_api_key():
-        from fillerkiller.granola.public_api_source import PublicApiSource
-
-        return PublicApiSource()
-    from fillerkiller.granola.cache_source import CacheSource
-
-    return CacheSource()
-
-
 def _cmd_sync(args) -> int:
     from fillerkiller.store.db import connect
-    from fillerkiller.sync import sync_meetings
+    from fillerkiller.sync import default_source, sync_meetings
 
     try:
-        source = _pick_source(args)
+        source = default_source(
+            force_api=getattr(args, "api", False),
+            legacy=getattr(args, "legacy_api", False),
+        )
     except Exception as e:
         print(f"sync failed: {e}", file=sys.stderr)
         return 1

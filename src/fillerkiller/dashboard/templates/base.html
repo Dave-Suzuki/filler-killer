@@ -51,6 +51,19 @@
   .utt.me .spk { color: var(--accent); }
   .legend { color: var(--muted); font-size: .8rem; margin-top: .6rem; }
   .legend mark { margin-right: .6rem; }
+  .toolbar { display: flex; justify-content: space-between; align-items: center;
+             gap: 1rem; margin-bottom: 1.2rem; flex-wrap: wrap; }
+  .ranges { display: flex; gap: .3rem; background: var(--card);
+            border: 1px solid var(--line); border-radius: 8px; padding: .25rem; }
+  .ranges a { padding: .3rem .8rem; border-radius: 6px; text-decoration: none;
+              color: var(--muted); font-size: .85rem; }
+  .ranges a.active { background: var(--accent); color: var(--card); font-weight: 600; }
+  .toolbar button { background: var(--card); color: var(--ink); font: inherit;
+                    font-size: .85rem; border: 1px solid var(--line);
+                    border-radius: 8px; padding: .45rem .9rem; cursor: pointer; }
+  .toolbar button:hover { border-color: var(--accent); color: var(--accent); }
+  .notice { color: var(--muted); font-size: .85rem; margin: 0 0 1rem; }
+  .notice.error { color: var(--accent); }
 </style>
 </head>
 <body>

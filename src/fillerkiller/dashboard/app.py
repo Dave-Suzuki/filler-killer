@@ -2,16 +2,33 @@
 
 import html
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from fillerkiller import config
 from fillerkiller.store.db import connect
 
 _TEMPLATES = Path(__file__).parent / "templates"
+
+# label -> rolling window in days (None = everything)
+RANGES = {"1d": 1, "3d": 3, "7d": 7, "30d": 30, "all": None}
+RANGE_LABELS = {"1d": "Day", "3d": "3 days", "7d": "Week", "30d": "Month", "all": "All"}
+DEFAULT_RANGE = "30d"
+
+
+def _cutoff(range_key: str) -> str | None:
+    days = RANGES.get(range_key, RANGES[DEFAULT_RANGE])
+    if days is None:
+        return None
+    # Bare "YYYY-MM-DDTHH:MM:SS" prefix compares lexicographically against
+    # both Granola's "...Z" stamps and our own isoformat() stamps.
+    return (datetime.now(timezone.utc) - timedelta(days=days)).strftime(
+        "%Y-%m-%dT%H:%M:%S"
+    )
 
 
 def highlight(text: str, hits: list[dict]) -> str:
@@ -32,28 +49,37 @@ def highlight(text: str, hits: list[dict]) -> str:
     return "".join(out)
 
 
-def create_app(db_path: Path | None = None) -> FastAPI:
+def create_app(db_path: Path | None = None, source_factory=None) -> FastAPI:
     app = FastAPI(title="filler-killer")
     templates = Jinja2Templates(directory=str(_TEMPLATES))
+
+    if source_factory is None:
+        from fillerkiller.sync import default_source as source_factory
 
     def db():
         return connect(db_path or config.db_path())
 
     @app.get("/", response_class=HTMLResponse)
-    def index(request: Request):
+    def index(request: Request, range: str = DEFAULT_RANGE,
+              synced: str | None = None, sync_error: str | None = None):
+        if range not in RANGES:
+            range = DEFAULT_RANGE
+        cutoff = _cutoff(range)
+        since = f" AND started_at >= '{cutoff}'" if cutoff else ""
         conn = db()
         meetings = conn.execute(
             "SELECT id, title, started_at, word_count, filler_count, per_100_words"
-            " FROM meetings WHERE word_count > 0 ORDER BY started_at"
+            f" FROM meetings WHERE word_count > 0{since} ORDER BY started_at"
         ).fetchall()
         sessions = conn.execute(
             "SELECT id, started_at, label, word_count, filler_count, per_100_words"
             " FROM live_sessions WHERE ended_at IS NOT NULL AND word_count > 0"
-            " ORDER BY started_at"
+            f"{since} ORDER BY started_at"
         ).fetchall()
         top_terms = conn.execute(
-            "SELECT term, COUNT(*) AS n FROM filler_hits GROUP BY term"
-            " ORDER BY n DESC LIMIT 12"
+            "SELECT term, COUNT(*) AS n FROM filler_hits WHERE meeting_id IN"
+            f" (SELECT id FROM meetings WHERE word_count > 0{since})"
+            " GROUP BY term ORDER BY n DESC LIMIT 12"
         ).fetchall()
         chart = {
             "meetings": [
@@ -82,8 +108,30 @@ def create_app(db_path: Path | None = None) -> FastAPI:
                 "overall": overall,
                 "total_fillers": total_fillers,
                 "meeting_count": len(meetings),
+                "range": range,
+                "range_labels": RANGE_LABELS,
+                "synced": synced,
+                "sync_error": sync_error,
             },
         )
+
+    @app.post("/sync")
+    def sync(range: str = DEFAULT_RANGE):
+        from urllib.parse import quote
+
+        from fillerkiller.sync import sync_meetings
+
+        conn = db()
+        try:
+            stats = sync_meetings(conn, source_factory())
+        except Exception as e:
+            return RedirectResponse(
+                f"/?range={range}&sync_error={quote(str(e)[:200])}", status_code=303
+            )
+        finally:
+            conn.close()
+        msg = quote(f"{stats['added']} new, {stats['updated']} updated")
+        return RedirectResponse(f"/?range={range}&synced={msg}", status_code=303)
 
     @app.get("/meeting/{meeting_id}", response_class=HTMLResponse)
     def meeting(request: Request, meeting_id: str):

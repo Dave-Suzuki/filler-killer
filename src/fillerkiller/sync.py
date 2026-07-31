@@ -13,6 +13,24 @@ from fillerkiller.detector import analyze_utterances
 from fillerkiller.granola.source import GranolaSource, Meeting
 
 
+def default_source(force_api: bool = False, legacy: bool = False) -> GranolaSource:
+    """GRANOLA_API_KEY (official API) wins; otherwise the local cache file.
+    legacy forces the old unofficial-API path for pre-encryption installs."""
+    from fillerkiller import config
+
+    if legacy:
+        from fillerkiller.granola.api_source import ApiSource
+
+        return ApiSource()
+    if force_api or config.granola_api_key():
+        from fillerkiller.granola.public_api_source import PublicApiSource
+
+        return PublicApiSource()
+    from fillerkiller.granola.cache_source import CacheSource
+
+    return CacheSource()
+
+
 def sync_meetings(conn: sqlite3.Connection, source: GranolaSource) -> dict:
     known = {
         row["id"]: row["updated_at"]

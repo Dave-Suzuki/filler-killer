@@ -64,3 +64,70 @@ class TestHighlight:
 
     def test_no_hits_plain_escape(self):
         assert highlight("a < b", []) == "a &lt; b"
+
+
+class TestRangesAndRefresh:
+    @pytest.fixture
+    def fresh_client(self, tmp_path):
+        """One recent meeting (now) and one old meeting (2020)."""
+        from datetime import datetime, timezone
+
+        from fillerkiller.detector import Utterance
+        from fillerkiller.granola.source import Meeting
+        from fillerkiller.sync import sync_meetings
+
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        meetings = [
+            Meeting(id="recent", title="Recent Standup", started_at=now,
+                    utterances=[Utterance("Me", "You know, it works.")]),
+            Meeting(id="ancient", title="Ancient Kickoff",
+                    started_at="2020-01-01T10:00:00Z",
+                    utterances=[Utterance("Me", "Basically done.")]),
+        ]
+
+        class Src:
+            def meetings(self):
+                return meetings
+
+        db = tmp_path / "fk.db"
+        conn = connect(db)
+        sync_meetings(conn, Src())
+        conn.close()
+        return TestClient(create_app(db, source_factory=Src))
+
+    def test_default_month_range_hides_old(self, fresh_client):
+        resp = fresh_client.get("/")
+        assert "Recent Standup" in resp.text
+        assert "Ancient Kickoff" not in resp.text
+
+    def test_all_range_shows_everything(self, fresh_client):
+        resp = fresh_client.get("/?range=all")
+        assert "Recent Standup" in resp.text
+        assert "Ancient Kickoff" in resp.text
+
+    def test_day_range_and_bad_range_fallback(self, fresh_client):
+        assert "Recent Standup" in fresh_client.get("/?range=1d").text
+        assert fresh_client.get("/?range=bogus").status_code == 200
+
+    def test_top_fillers_respect_range(self, fresh_client):
+        text = fresh_client.get("/?range=1d").text
+        assert "you know" in text
+        assert "basically" not in text  # only in the ancient meeting
+
+    def test_refresh_endpoint_syncs_and_redirects(self, fresh_client):
+        resp = fresh_client.post("/sync?range=7d", follow_redirects=False)
+        assert resp.status_code == 303
+        assert "range=7d" in resp.headers["location"]
+        assert "synced=" in resp.headers["location"]
+
+    def test_refresh_error_redirects_with_message(self, tmp_path):
+        class Boom:
+            def meetings(self):
+                raise RuntimeError("api down")
+
+        db = tmp_path / "fk.db"
+        connect(db).close()
+        client = TestClient(create_app(db, source_factory=Boom))
+        resp = client.post("/sync", follow_redirects=False)
+        assert resp.status_code == 303
+        assert "sync_error=" in resp.headers["location"]
