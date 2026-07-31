@@ -46,10 +46,12 @@ extension RawSegment: Decodable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         text = try container.decodeIfPresent(String.self, forKey: .text)
         source = try container.decodeIfPresent(String.self, forKey: .source)
+        // try? flattens the decodeIfPresent double optional (SE-0230), so
+        // `obj` binds fully unwrapped here.
         if let obj = try? container.decodeIfPresent(SpeakerObjectPayload.self, forKey: .speaker) {
-            speakerObject = obj.map {
-                SpeakerObject(source: $0.source, attribution: $0.attribution, name: $0.name)
-            }
+            speakerObject = SpeakerObject(
+                source: obj.source, attribution: obj.attribution, name: obj.name
+            )
             speakerName = nil
         } else {
             speakerName = try? container.decodeIfPresent(String.self, forKey: .speaker)
