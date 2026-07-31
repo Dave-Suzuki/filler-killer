@@ -1,0 +1,52 @@
+name: macapp
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # Fast feedback: the pure-Swift package (DetectorKit + golden parity tests)
+  # builds and tests on Linux before the slower macOS job.
+  linux-swift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.0"
+      - run: swift test --package-path macapp/FillerKillerKit
+
+  mac-build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate --spec macapp/project.yml --project macapp
+      - name: Package tests (incl. golden parity)
+        run: swift test --package-path macapp/FillerKillerKit
+      - name: Build app (Release, ad-hoc signed)
+        run: |
+          xcodebuild -project macapp/FillerKiller.xcodeproj \
+            -target FillerKiller -configuration Release build \
+            SYMROOT="$PWD/macapp/build" \
+            CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=YES
+      - name: Zip artifact
+        run: |
+          cd macapp/build/Release
+          cat > README-INSTALL.txt <<'EOF'
+          Unsigned development build.
+          1. Unzip
+          2. Remove the quarantine flag:
+               xattr -dr com.apple.quarantine FillerKiller.app
+          3. Open FillerKiller.app — look for "FK —" in the menu bar.
+          EOF
+          ditto -c -k --keepParent FillerKiller.app FillerKiller-app.zip
+          zip -q FillerKiller-app.zip README-INSTALL.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FillerKiller-dev-build
+          path: macapp/build/Release/FillerKiller-app.zip
+          retention-days: 14

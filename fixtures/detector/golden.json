@@ -1,0 +1,844 @@
+{
+ "version": 1,
+ "span_semantics": "unicode_code_points",
+ "text_cases": [
+  {
+   "name": "um_uh_basic",
+   "text": "Um, I think, uh, we should go.",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "um",
+     "category": "vocalized",
+     "start": 0,
+     "end": 2
+    },
+    {
+     "term": "uh",
+     "category": "vocalized",
+     "start": 13,
+     "end": 15
+    }
+   ]
+  },
+  {
+   "name": "vocalized_excluded_posthoc",
+   "text": "Um, I think it works.",
+   "include_vocalized": false,
+   "expected_hits": []
+  },
+  {
+   "name": "no_substring_matches",
+   "text": "The umbrella and the error were ahead.",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "vocalized_variants",
+   "text": "Erm, hmm, uhh, that's, umm, fine.",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "erm",
+     "category": "vocalized",
+     "start": 0,
+     "end": 3
+    },
+    {
+     "term": "hmm",
+     "category": "vocalized",
+     "start": 5,
+     "end": 8
+    },
+    {
+     "term": "uhh",
+     "category": "vocalized",
+     "start": 10,
+     "end": 13
+    },
+    {
+     "term": "umm",
+     "category": "vocalized",
+     "start": 23,
+     "end": 26
+    }
+   ]
+  },
+  {
+   "name": "you_know",
+   "text": "It was, you know, pretty hard.",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "you know",
+     "category": "phrase",
+     "start": 8,
+     "end": 16
+    }
+   ]
+  },
+  {
+   "name": "i_mean_kinda",
+   "text": "I mean, it's kinda rough.",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "i mean",
+     "category": "phrase",
+     "start": 0,
+     "end": 6
+    },
+    {
+     "term": "kinda",
+     "category": "phrase",
+     "start": 13,
+     "end": 18
+    }
+   ]
+  },
+  {
+   "name": "kind_of_hedge",
+   "text": "It was kind of difficult.",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "kind of",
+     "category": "phrase",
+     "start": 7,
+     "end": 14
+    }
+   ]
+  },
+  {
+   "name": "kind_of_classifier",
+   "text": "What kind of car is that?",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "kind_of_after_the",
+   "text": "It's the kind of thing we do.",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "sort_of_hedge",
+   "text": "He was sort of right.",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "sort of",
+     "category": "phrase",
+     "start": 7,
+     "end": 14
+    }
+   ]
+  },
+  {
+   "name": "single_word_fillers",
+   "text": "Basically it was literally done.",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "basically",
+     "category": "phrase",
+     "start": 0,
+     "end": 9
+    },
+    {
+     "term": "literally",
+     "category": "phrase",
+     "start": 17,
+     "end": 26
+    }
+   ]
+  },
+  {
+   "name": "honestly_obviously",
+   "text": "Honestly, it was obviously fine.",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "honestly",
+     "category": "phrase",
+     "start": 0,
+     "end": 8
+    },
+    {
+     "term": "obviously",
+     "category": "phrase",
+     "start": 17,
+     "end": 26
+    }
+   ]
+  },
+  {
+   "name": "case_insensitive",
+   "text": "You know, Actually, it worked.",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "you know",
+     "category": "phrase",
+     "start": 0,
+     "end": 8
+    },
+    {
+     "term": "actually",
+     "category": "phrase",
+     "start": 10,
+     "end": 18
+    }
+   ]
+  },
+  {
+   "name": "discourse_like",
+   "text": "It was like really hard.",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "like",
+     "category": "discourse",
+     "start": 7,
+     "end": 11
+    }
+   ]
+  },
+  {
+   "name": "would_like",
+   "text": "I would like a coffee.",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "looks_like",
+   "text": "It looks like rain.",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "like_to",
+   "text": "I like to run.",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "like_that",
+   "text": "I like that idea.",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "something_like",
+   "text": "It costs something like $1,300.",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "feels_like",
+   "text": "It feels like winter.",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "dont_like",
+   "text": "I don't like it.",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "just_like",
+   "text": "It was just like last time.",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "double_like",
+   "text": "It was like, like, impossible.",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "like",
+     "category": "discourse",
+     "start": 7,
+     "end": 11
+    },
+    {
+     "term": "like, like",
+     "category": "repetition",
+     "start": 7,
+     "end": 17
+    },
+    {
+     "term": "like",
+     "category": "discourse",
+     "start": 13,
+     "end": 17
+    }
+   ]
+  },
+  {
+   "name": "sentence_initial_so",
+   "text": "So we decided to ship it.",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "so",
+     "category": "discourse",
+     "start": 0,
+     "end": 2
+    }
+   ]
+  },
+  {
+   "name": "mid_sentence_so",
+   "text": "It was so good we stayed.",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "so_after_period",
+   "text": "We shipped. So the next step is QA.",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "so",
+     "category": "discourse",
+     "start": 12,
+     "end": 14
+    }
+   ]
+  },
+  {
+   "name": "so_far",
+   "text": "So far it works.",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "so_after_comma",
+   "text": "Yes, so basically done.",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "basically",
+     "category": "phrase",
+     "start": 8,
+     "end": 17
+    }
+   ]
+  },
+  {
+   "name": "um_so_transparency",
+   "text": "Um, so I wanted to walk through the plan.",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "um",
+     "category": "vocalized",
+     "start": 0,
+     "end": 2
+    },
+    {
+     "term": "so",
+     "category": "discourse",
+     "start": 4,
+     "end": 6
+    }
+   ]
+  },
+  {
+   "name": "um_uh_so_chain",
+   "text": "Um, uh, so we begin.",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "um",
+     "category": "vocalized",
+     "start": 0,
+     "end": 2
+    },
+    {
+     "term": "uh",
+     "category": "vocalized",
+     "start": 4,
+     "end": 6
+    },
+    {
+     "term": "so",
+     "category": "discourse",
+     "start": 8,
+     "end": 10
+    }
+   ]
+  },
+  {
+   "name": "um_so_vocalized_excluded",
+   "text": "Um, so I wanted to walk through the plan.",
+   "include_vocalized": false,
+   "expected_hits": [
+    {
+     "term": "so",
+     "category": "discourse",
+     "start": 4,
+     "end": 6
+    }
+   ]
+  },
+  {
+   "name": "so_at_utterance_end",
+   "text": "I think so.",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "so_after_question",
+   "text": "Really? So what happened next?",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "quoted_so",
+   "text": "“So we begin.”",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "so",
+     "category": "discourse",
+     "start": 1,
+     "end": 3
+    }
+   ]
+  },
+  {
+   "name": "so_after_dash",
+   "text": "Right — so the plan holds.",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "exact_repeats",
+   "text": "I I think the the plan works.",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "i i",
+     "category": "repetition",
+     "start": 0,
+     "end": 3
+    },
+    {
+     "term": "the the",
+     "category": "repetition",
+     "start": 10,
+     "end": 17
+    }
+   ]
+  },
+  {
+   "name": "prefix_contraction",
+   "text": "we we're very understanding",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "we we're",
+     "category": "repetition",
+     "start": 0,
+     "end": 8
+    }
+   ]
+  },
+  {
+   "name": "allowed_doubles",
+   "text": "It was very very good. No no, really.",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "triple_repeat",
+   "text": "that that that",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "that that",
+     "category": "repetition",
+     "start": 0,
+     "end": 9
+    }
+   ]
+  },
+  {
+   "name": "quadruple_repeat",
+   "text": "go go go go",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "go go",
+     "category": "repetition",
+     "start": 0,
+     "end": 5
+    },
+    {
+     "term": "go go",
+     "category": "repetition",
+     "start": 6,
+     "end": 11
+    }
+   ]
+  },
+  {
+   "name": "repeat_case_mix",
+   "text": "The the plan and We we're set.",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "the the",
+     "category": "repetition",
+     "start": 0,
+     "end": 7
+    },
+    {
+     "term": "we we're",
+     "category": "repetition",
+     "start": 17,
+     "end": 25
+    }
+   ]
+  },
+  {
+   "name": "curly_apostrophe_token_split",
+   "text": "we we’re very understanding",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "we we",
+     "category": "repetition",
+     "start": 0,
+     "end": 5
+    }
+   ]
+  },
+  {
+   "name": "emoji_offsets",
+   "text": "I 😀 think, you know, it's fine.",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "you know",
+     "category": "phrase",
+     "start": 11,
+     "end": 19
+    }
+   ]
+  },
+  {
+   "name": "cjk_mixed",
+   "text": "次も終わり you know です",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "you know",
+     "category": "phrase",
+     "start": 6,
+     "end": 14
+    }
+   ]
+  },
+  {
+   "name": "newlines_and_tabs",
+   "text": "So\n\twe, you know,\nship it.",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "so",
+     "category": "discourse",
+     "start": 0,
+     "end": 2
+    },
+    {
+     "term": "you know",
+     "category": "phrase",
+     "start": 8,
+     "end": 16
+    }
+   ]
+  },
+  {
+   "name": "empty_text",
+   "text": "",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "only_punctuation",
+   "text": "?! ... —",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "apostrophe_only_tokens",
+   "text": "'' ' ''",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "phrase_repetition_overlap",
+   "text": "you you know the drill",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "you you",
+     "category": "repetition",
+     "start": 0,
+     "end": 7
+    },
+    {
+     "term": "you know",
+     "category": "phrase",
+     "start": 4,
+     "end": 12
+    }
+   ]
+  },
+  {
+   "name": "kind_of_kind_of",
+   "text": "kind of kind of works",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "kind of",
+     "category": "phrase",
+     "start": 0,
+     "end": 7
+    },
+    {
+     "term": "kind of",
+     "category": "phrase",
+     "start": 8,
+     "end": 15
+    }
+   ]
+  },
+  {
+   "name": "granola_excerpt",
+   "text": "And I know you you know, generally try to make sense better. The the reason is, like, as Chelsea touched upon, we keep having the consistent challenging feedback.",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "you you",
+     "category": "repetition",
+     "start": 11,
+     "end": 18
+    },
+    {
+     "term": "you know",
+     "category": "phrase",
+     "start": 15,
+     "end": 23
+    },
+    {
+     "term": "the the",
+     "category": "repetition",
+     "start": 61,
+     "end": 68
+    },
+    {
+     "term": "like",
+     "category": "discourse",
+     "start": 80,
+     "end": 84
+    }
+   ]
+  },
+  {
+   "name": "live_style_segment",
+   "text": "Um so I wanted to walk through the plan it was kind of hard to schedule",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "um",
+     "category": "vocalized",
+     "start": 0,
+     "end": 2
+    },
+    {
+     "term": "so",
+     "category": "discourse",
+     "start": 3,
+     "end": 5
+    },
+    {
+     "term": "kind of",
+     "category": "phrase",
+     "start": 47,
+     "end": 54
+    }
+   ]
+  }
+ ],
+ "utterance_cases": [
+  {
+   "name": "me_only_filtering",
+   "utterances": [
+    {
+     "speaker": "Me",
+     "text": "You know, I think it works."
+    },
+    {
+     "speaker": "Chelsea",
+     "text": "You know what I mean, basically."
+    },
+    {
+     "speaker": "Me",
+     "text": "It was kind of hard."
+    }
+   ],
+   "speaker": "Me",
+   "include_vocalized": false,
+   "expected": {
+    "word_count": 11,
+    "filler_count": 2,
+    "per_100_words": 18.18,
+    "hits": [
+     {
+      "term": "you know",
+      "category": "phrase",
+      "start": 0,
+      "end": 8,
+      "utterance_idx": 0
+     },
+     {
+      "term": "kind of",
+      "category": "phrase",
+      "start": 7,
+      "end": 14,
+      "utterance_idx": 2
+     }
+    ]
+   }
+  },
+  {
+   "name": "bankers_rounding_3125",
+   "utterances": [
+    {
+     "speaker": "Me",
+     "text": "you know alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec romeo sierra tango uniform victor whiskey xray yankee zulu green blue red gold"
+    }
+   ],
+   "speaker": "Me",
+   "include_vocalized": true,
+   "expected": {
+    "word_count": 32,
+    "filler_count": 1,
+    "per_100_words": 3.12,
+    "hits": [
+     {
+      "term": "you know",
+      "category": "phrase",
+      "start": 0,
+      "end": 8,
+      "utterance_idx": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "bankers_rounding_9375",
+   "utterances": [
+    {
+     "speaker": "Me",
+     "text": "um you know like alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec romeo sierra tango uniform victor whiskey xray yankee zulu green blue"
+    }
+   ],
+   "speaker": "Me",
+   "include_vocalized": true,
+   "expected": {
+    "word_count": 32,
+    "filler_count": 3,
+    "per_100_words": 9.38,
+    "hits": [
+     {
+      "term": "um",
+      "category": "vocalized",
+      "start": 0,
+      "end": 2,
+      "utterance_idx": 0
+     },
+     {
+      "term": "you know",
+      "category": "phrase",
+      "start": 3,
+      "end": 11,
+      "utterance_idx": 0
+     },
+     {
+      "term": "like",
+      "category": "discourse",
+      "start": 12,
+      "end": 16,
+      "utterance_idx": 0
+     }
+    ]
+   }
+  },
+  {
+   "name": "empty",
+   "utterances": [],
+   "speaker": "Me",
+   "include_vocalized": true,
+   "expected": {
+    "word_count": 0,
+    "filler_count": 0,
+    "per_100_words": 0.0,
+    "hits": []
+   }
+  },
+  {
+   "name": "multi_utterance_indices",
+   "utterances": [
+    {
+     "speaker": "Me",
+     "text": "So the plan holds."
+    },
+    {
+     "speaker": "Them",
+     "text": "so basically fine"
+    },
+    {
+     "speaker": "Me",
+     "text": "It was kind of, you know, fine."
+    }
+   ],
+   "speaker": "Me",
+   "include_vocalized": true,
+   "expected": {
+    "word_count": 11,
+    "filler_count": 3,
+    "per_100_words": 27.27,
+    "hits": [
+     {
+      "term": "so",
+      "category": "discourse",
+      "start": 0,
+      "end": 2,
+      "utterance_idx": 0
+     },
+     {
+      "term": "kind of",
+      "category": "phrase",
+      "start": 7,
+      "end": 14,
+      "utterance_idx": 2
+     },
+     {
+      "term": "you know",
+      "category": "phrase",
+      "start": 16,
+      "end": 24,
+      "utterance_idx": 2
+     }
+    ]
+   }
+  }
+ ]
+}

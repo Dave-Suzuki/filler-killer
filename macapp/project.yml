@@ -1,0 +1,45 @@
+# XcodeGen spec — the .xcodeproj is generated (and gitignored):
+#   brew install xcodegen && cd macapp && xcodegen generate
+name: FillerKiller
+options:
+  bundleIdPrefix: com.davesuzuki
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "16.0"
+  createIntermediateGroups: true
+
+packages:
+  FillerKillerKit:
+    path: FillerKillerKit
+
+targets:
+  FillerKiller:
+    type: application
+    platform: macOS
+    sources:
+      - FillerKiller
+    dependencies:
+      - package: FillerKillerKit
+        product: DetectorKit
+    info:
+      path: FillerKiller/Info.plist
+      properties:
+        CFBundleDisplayName: Filler Killer
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        LSUIElement: true
+        LSMinimumSystemVersion: "14.0"
+        NSMicrophoneUsageDescription: >-
+          Filler Killer listens to your microphone only during sessions you
+          start, to count filler words. Audio never leaves your Mac.
+        NSSpeechRecognitionUsageDescription: >-
+          Filler Killer uses Apple's speech recognition in on-device mode to
+          transcribe your speech locally. Nothing is sent anywhere.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.davesuzuki.FillerKiller
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.9"
+        ENABLE_HARDENED_RUNTIME: true
+        DEAD_CODE_STRIPPING: true
