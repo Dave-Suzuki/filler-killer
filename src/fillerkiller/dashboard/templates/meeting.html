@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}{{ m.title }} — filler-killer{% endblock %}
+{% block content %}
+<p><a href="/">&larr; all meetings</a></p>
+<h2 style="font-size:1.2rem">{{ m.title }} <span style="color:var(--muted);font-weight:400">— {{ m.started_at[:10] }}</span></h2>
+
+<div class="cards">
+  <div class="card"><div class="num">{{ m.per_100_words }}</div><div class="lbl">fillers per 100 words</div></div>
+  <div class="card"><div class="num">{{ m.filler_count }}</div><div class="lbl">fillers</div></div>
+  <div class="card"><div class="num">{{ m.word_count }}</div><div class="lbl">words you spoke</div></div>
+</div>
+
+{% if term_counts %}
+<div class="panel">
+  <h2>Breakdown</h2>
+  <table>
+    <tr><th>Filler</th><th class="num">Count</th></tr>
+    {% for term, n in term_counts %}
+    <tr><td>{{ term }}</td><td class="num">{{ n }}</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+<div class="panel">
+  <h2>Transcript (your fillers highlighted)</h2>
+  {% for u in transcript %}
+  <p class="utt {{ 'me' if u.speaker == 'Me' else '' }}">
+    <span class="spk">{{ u.speaker }}</span>{{ u.html | safe }}
+  </p>
+  {% endfor %}
+  <div class="legend">
+    <mark class="cat-phrase">phrase</mark>
+    <mark class="cat-discourse">discourse (like / so)</mark>
+    <mark class="cat-repetition">stutter repeat</mark>
+    <mark class="cat-vocalized">um / uh (live only)</mark>
+  </div>
+</div>
+{% endblock %}
