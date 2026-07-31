@@ -28,11 +28,17 @@ class GranolaSource(Protocol):
 
 
 def _speaker(segment: dict) -> str:
-    """Granola attributes segments via source: microphone = the note-taker
-    (Me), system = everyone else coming through the speakers."""
+    """Granola marks the note-taker's own speech as microphone/me; everyone
+    else comes through system audio. Cache segments carry a flat source field;
+    the official API nests it as speaker: {source, attribution}."""
+    sp = segment.get("speaker")
+    if isinstance(sp, dict):
+        if sp.get("attribution") == "me" or sp.get("source") == "microphone":
+            return "Me"
+        return sp.get("name") or "Them"
     if segment.get("source") == "microphone":
         return "Me"
-    return segment.get("speaker") or "Them"
+    return sp or "Them"
 
 
 def merge_segments(segments: list) -> list[Utterance]:

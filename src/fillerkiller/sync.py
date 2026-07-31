@@ -18,6 +18,8 @@ def sync_meetings(conn: sqlite3.Connection, source: GranolaSource) -> dict:
         row["id"]: row["updated_at"]
         for row in conn.execute("SELECT id, updated_at FROM meetings")
     }
+    if hasattr(source, "set_known"):
+        source.set_known(known)  # lets API sources skip transcript fetches
     added = updated = skipped = 0
     for meeting in source.meetings():
         if meeting.id in known:

@@ -1,21 +1,30 @@
 """Official Granola API source (public-api.granola.ai).
 
 This is the sanctioned path — and the ONLY path on Granola >= 7.427, which
-encrypts all local data (cache-v6.json.enc, SQLCipher granola.db) with a key
-readable only by Granola-signed code.
+encrypts all local data with a key readable only by Granola-signed code.
 
-Auth: a `grn_...` API key generated from the Granola desktop app, supplied
-via the GRANOLA_API_KEY environment variable. Keys are workspace-scoped and
-non-expiring; individuals may need a workspace admin to enable personal API
-keys. Read-only access to notes and transcripts.
+Verified against the live API (July 2026):
+  GET /v1/notes?limit=N          -> {"notes": [...], "cursor": ..., "hasMore": bool}
+  GET /v1/notes/{id}?include=transcript
+      -> note detail; "transcript" is a list of segments:
+         {"text", "start_time", "end_time",
+          "speaker": {"source": "microphone"|"system", "attribution": "me"|...}}
+      "transcript" is null for meetings still processing (retried next sync).
+
+Auth: a `grn_...` API key generated from the Granola desktop app, supplied via
+GRANOLA_API_KEY. Read-only.
 """
 
 import json
+import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from fillerkiller import config
 from fillerkiller.granola.source import Meeting, merge_segments
+
+_MAX_PAGES = 20
 
 
 class PublicApiError(Exception):
@@ -23,10 +32,12 @@ class PublicApiError(Exception):
 
 
 class PublicApiSource:
-    def __init__(self, api_key: str | None = None, base: str | None = None, limit: int = 200):
+    def __init__(self, api_key: str | None = None, base: str | None = None,
+                 page_size: int = 100):
         self.api_key = api_key or config.granola_api_key()
         self.base = (base or config.granola_api_base()).rstrip("/")
-        self.limit = limit
+        self.page_size = page_size
+        self._known: dict[str, str | None] = {}
         if not self.api_key:
             raise PublicApiError(
                 "GRANOLA_API_KEY is not set. Generate an API key in the Granola "
@@ -34,67 +45,92 @@ class PublicApiSource:
                 "enable personal API keys), then: export GRANOLA_API_KEY=grn_..."
             )
 
-    def _post(self, endpoint: str, payload: dict) -> dict | list:
+    def set_known(self, known: dict[str, str | None]) -> None:
+        """id -> updated_at of already-synced meetings, so unchanged notes
+        don't need a transcript fetch (sync passes this in)."""
+        self._known = known
+
+    def _get(self, path: str, params: dict | None = None) -> dict | list:
+        url = f"{self.base}/{path.lstrip('/')}"
+        if params:
+            url += "?" + urllib.parse.urlencode(params)
         req = urllib.request.Request(
-            f"{self.base}/{endpoint.lstrip('/')}",
-            data=json.dumps(payload).encode(),
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            },
-            method="POST",
+            url,
+            headers={"Authorization": f"Bearer {self.api_key}",
+                     "Accept": "application/json"},
         )
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
                 return json.loads(resp.read())
         except urllib.error.HTTPError as e:
-            body = ""
-            try:
-                body = e.read().decode(errors="replace")[:300]
-            except Exception:
-                pass
             if e.code in (401, 403):
                 raise PublicApiError(
                     f"Granola API rejected the key ({e.code}). Check GRANOLA_API_KEY, "
                     "and that API access is enabled for your workspace/account."
                 )
-            raise PublicApiError(f"Granola API {endpoint} failed: HTTP {e.code} {body}")
+            body = ""
+            try:
+                body = e.read().decode(errors="replace")[:200]
+            except Exception:
+                pass
+            raise PublicApiError(f"Granola API GET /{path} failed: HTTP {e.code} {body}")
         except Exception as e:
-            raise PublicApiError(f"Granola API {endpoint} failed: {e}")
+            raise PublicApiError(f"Granola API GET /{path} failed: {e}")
 
     def ping(self) -> int:
-        """Cheap connectivity/auth check; returns how many documents are visible."""
-        docs = self._docs(limit=1)
-        return len(docs)
+        """Cheap connectivity/auth check; returns how many notes are visible
+        on the first page."""
+        resp = self._get("notes", {"limit": 1})
+        return len(resp.get("notes") or [])
 
-    def _docs(self, limit: int) -> list[dict]:
-        resp = self._post("get-documents", {"limit": limit, "offset": 0})
-        if isinstance(resp, list):
-            return resp
-        return resp.get("docs") or resp.get("documents") or []
+    def _list_notes(self) -> list[dict]:
+        notes: list[dict] = []
+        cursor: str | None = None
+        for _ in range(_MAX_PAGES):
+            params: dict = {"limit": self.page_size}
+            if cursor:
+                params["cursor"] = cursor
+            resp = self._get("notes", params)
+            page = resp.get("notes") or []
+            notes.extend(page)
+            next_cursor = resp.get("cursor")
+            if not resp.get("hasMore") or not page or not next_cursor or next_cursor == cursor:
+                break
+            cursor = next_cursor
+        return notes
 
     def meetings(self) -> list[Meeting]:
+        listed = self._list_notes()
         out: list[Meeting] = []
-        for doc in self._docs(self.limit):
-            doc_id = doc.get("id")
-            if not doc_id:
+        fetched = 0
+        for note in listed:
+            note_id = note.get("id")
+            if not note_id:
                 continue
-            transcript = self._post("get-document-transcript", {"document_id": doc_id})
-            segments = (
-                transcript
-                if isinstance(transcript, list)
-                else transcript.get("transcript") or transcript.get("utterances") or []
-            )
+            updated = note.get("updated_at")
+            if note_id in self._known and self._known[note_id] == updated:
+                # Unchanged since last sync: no transcript fetch needed. Yield a
+                # stub so sync's skip-accounting still sees it.
+                out.append(Meeting(id=str(note_id), title=note.get("title") or "(untitled)",
+                                   started_at=note.get("created_at") or "",
+                                   updated_at=updated, utterances=[]))
+                continue
+            detail = self._get(f"notes/{note_id}", {"include": "transcript"})
+            fetched += 1
+            if fetched % 20 == 0:
+                print(f"  fetched {fetched} transcripts...", file=sys.stderr)
+            segments = detail.get("transcript")
+            if not segments:
+                continue  # still processing; picked up on a later sync
             utts = merge_segments(segments)
             if not utts:
                 continue
             out.append(
                 Meeting(
-                    id=str(doc_id),
-                    title=doc.get("title") or "(untitled)",
-                    started_at=doc.get("created_at") or "",
-                    updated_at=doc.get("updated_at"),
+                    id=str(note_id),
+                    title=detail.get("title") or note.get("title") or "(untitled)",
+                    started_at=detail.get("created_at") or note.get("created_at") or "",
+                    updated_at=updated,
                     utterances=utts,
                 )
             )
