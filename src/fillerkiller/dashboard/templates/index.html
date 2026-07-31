@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="cards">
+  <div class="card"><div class="num">{{ overall }}</div><div class="lbl">fillers per 100 words (all time)</div></div>
+  <div class="card"><div class="num">{{ total_fillers }}</div><div class="lbl">total fillers caught</div></div>
+  <div class="card"><div class="num">{{ meeting_count }}</div><div class="lbl">meetings analyzed</div></div>
+</div>
+
+<div class="panel">
+  <h2>Filler rate over time</h2>
+  <canvas id="trend" height="90"></canvas>
+</div>
+
+<div class="panel">
+  <h2>Your top fillers</h2>
+  <canvas id="terms" height="90"></canvas>
+</div>
+
+<div class="panel">
+  <h2>Meetings</h2>
+  <table>
+    <tr><th>Date</th><th>Meeting</th><th class="num">Words (you)</th><th class="num">Fillers</th><th class="num">/100 words</th></tr>
+    {% for m in meetings %}
+    <tr>
+      <td>{{ m.started_at[:10] }}</td>
+      <td><a href="/meeting/{{ m.id }}">{{ m.title }}</a></td>
+      <td class="num">{{ m.word_count }}</td>
+      <td class="num">{{ m.filler_count }}</td>
+      <td class="num">{{ m.per_100_words }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+{% if sessions %}
+<div class="panel">
+  <h2>Live sessions</h2>
+  <table>
+    <tr><th>Date</th><th>Session</th><th class="num">Words</th><th class="num">Fillers</th><th class="num">/100 words</th></tr>
+    {% for s in sessions %}
+    <tr>
+      <td>{{ s.started_at[:10] }}</td>
+      <td>{{ s.label or "Live session " ~ s.id }}</td>
+      <td class="num">{{ s.word_count }}</td>
+      <td class="num">{{ s.filler_count }}</td>
+      <td class="num">{{ s.per_100_words }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+<script>
+const data = {{ chart_json | safe }};
+const css = getComputedStyle(document.documentElement);
+const accent = css.getPropertyValue('--accent').trim();
+const muted = css.getPropertyValue('--muted').trim();
+const line = css.getPropertyValue('--line').trim();
+
+new Chart(document.getElementById('trend'), {
+  type: 'line',
+  data: { datasets: [
+    { label: 'Granola meetings', data: data.meetings, borderColor: accent,
+      backgroundColor: accent, tension: .25, pointRadius: 3 },
+    { label: 'Live sessions', data: data.sessions, borderColor: muted,
+      backgroundColor: muted, tension: .25, pointRadius: 3 },
+  ]},
+  options: {
+    parsing: { xAxisKey: 'x', yAxisKey: 'y' },
+    scales: { x: { type: 'category', grid: { color: line } },
+              y: { beginAtZero: true, grid: { color: line },
+                   title: { display: true, text: 'fillers / 100 words' } } },
+    plugins: { tooltip: { callbacks: {
+      title: items => items.map(i => i.raw.title) } } }
+  }
+});
+
+new Chart(document.getElementById('terms'), {
+  type: 'bar',
+  data: { labels: data.terms.labels,
+          datasets: [{ data: data.terms.counts, backgroundColor: accent }] },
+  options: { plugins: { legend: { display: false } },
+             scales: { x: { grid: { display: false } },
+                       y: { beginAtZero: true, grid: { color: line } } } }
+});
+</script>
+{% endblock %}
