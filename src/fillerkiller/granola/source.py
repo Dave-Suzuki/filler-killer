@@ -25,3 +25,29 @@ class GranolaSource(Protocol):
     def meetings(self) -> list[Meeting]:
         """All available meetings with transcripts, newest first."""
         ...
+
+
+def _speaker(segment: dict) -> str:
+    """Granola attributes segments via source: microphone = the note-taker
+    (Me), system = everyone else coming through the speakers."""
+    if segment.get("source") == "microphone":
+        return "Me"
+    return segment.get("speaker") or "Them"
+
+
+def merge_segments(segments: list) -> list[Utterance]:
+    """Merge consecutive same-speaker segments so phrases and stutter-repeats
+    that span a segment boundary are still detectable."""
+    merged: list[Utterance] = []
+    for seg in segments:
+        if not isinstance(seg, dict):
+            continue
+        text = (seg.get("text") or "").strip()
+        if not text:
+            continue
+        speaker = _speaker(seg)
+        if merged and merged[-1].speaker == speaker:
+            merged[-1].text += " " + text
+        else:
+            merged.append(Utterance(speaker, text))
+    return merged

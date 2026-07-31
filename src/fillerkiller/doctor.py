@@ -17,31 +17,57 @@ def run_doctor() -> int:
 
     # --- Reflection path -----------------------------------------------------
     print("Reflection (Granola):")
-    cache = config.granola_cache_path()
-    if cache.exists():
+    api_key = config.granola_api_key()
+    if api_key:
         try:
-            from fillerkiller.granola.cache_source import CacheSource
+            from fillerkiller.granola.public_api_source import PublicApiSource
 
-            meetings = CacheSource(cache).meetings()
-            with_words = sum(1 for m in meetings if m.utterances)
-            _line(OK, "Granola cache", f"{with_words} meetings with transcripts found")
-            if with_words == 0:
-                _line(
-                    WARN,
-                    "No transcripts in the cache",
-                    "cache format may have drifted — try: fk sync --api",
-                )
+            PublicApiSource(api_key).ping()
+            _line(OK, "Granola official API", "key accepted — fk sync will use it")
         except Exception as e:
             failures += 1
-            _line(FAIL, "Granola cache unreadable", f"{e} — fallback: fk sync --api")
+            _line(FAIL, "Granola official API", str(e))
     else:
-        failures += 1
-        _line(
-            FAIL,
-            "Granola cache not found",
-            f"looked at {cache}. Is the Granola desktop app installed? "
-            "(Override with FK_GRANOLA_CACHE.)",
-        )
+        cache = config.granola_cache_path()
+        gdir = config.granola_dir()
+        # Granola >= 7.427 fingerprint: encrypted cache present, no storage.dek.
+        encrypted = (gdir / "cache-v6.json.enc").exists() and not (gdir / "storage.dek").exists()
+        if encrypted:
+            failures += 1
+            _line(
+                FAIL,
+                "Granola encrypts its local data on this version (>= 7.427)",
+                "the cache can't be read locally. Fix: generate an API key in the "
+                "Granola desktop app (Settings → API keys; a workspace admin may "
+                "need to enable personal API keys), then set GRANOLA_API_KEY=grn_... "
+                "in your shell profile and re-run fk doctor",
+            )
+        elif cache.exists():
+            try:
+                from fillerkiller.granola.cache_source import CacheSource
+
+                meetings = CacheSource(cache).meetings()
+                with_words = sum(1 for m in meetings if m.utterances)
+                _line(OK, "Granola cache", f"{with_words} meetings with transcripts found")
+                if with_words == 0:
+                    _line(
+                        WARN,
+                        "No transcripts in the cache",
+                        "cache format may have drifted — set GRANOLA_API_KEY to use "
+                        "the official API instead",
+                    )
+            except Exception as e:
+                failures += 1
+                _line(FAIL, "Granola cache unreadable", str(e))
+        else:
+            failures += 1
+            _line(
+                FAIL,
+                "Granola cache not found",
+                f"looked at {cache}. Is the Granola desktop app installed? "
+                "(Override with FK_GRANOLA_CACHE, or set GRANOLA_API_KEY to use "
+                "the official API.)",
+            )
 
     try:
         from fillerkiller.store.db import connect

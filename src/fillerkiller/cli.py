@@ -5,18 +5,33 @@ import sys
 import webbrowser
 
 
+def _pick_source(args):
+    """GRANOLA_API_KEY (official API) wins; otherwise the local cache file.
+    --legacy-api forces the old unofficial-API path for pre-encryption installs."""
+    from fillerkiller import config
+
+    if getattr(args, "legacy_api", False):
+        from fillerkiller.granola.api_source import ApiSource
+
+        return ApiSource()
+    if getattr(args, "api", False) or config.granola_api_key():
+        from fillerkiller.granola.public_api_source import PublicApiSource
+
+        return PublicApiSource()
+    from fillerkiller.granola.cache_source import CacheSource
+
+    return CacheSource()
+
+
 def _cmd_sync(args) -> int:
     from fillerkiller.store.db import connect
     from fillerkiller.sync import sync_meetings
 
-    if args.api:
-        from fillerkiller.granola.api_source import ApiSource
-
-        source = ApiSource()
-    else:
-        from fillerkiller.granola.cache_source import CacheSource
-
-        source = CacheSource()
+    try:
+        source = _pick_source(args)
+    except Exception as e:
+        print(f"sync failed: {e}", file=sys.stderr)
+        return 1
     conn = connect()
     try:
         stats = sync_meetings(conn, source)
@@ -77,7 +92,11 @@ def main(argv: list[str] | None = None) -> int:
 
     p_sync = sub.add_parser("sync", help="pull Granola meetings and analyze them")
     p_sync.add_argument("--api", action="store_true",
-                        help="use the Granola HTTP API instead of the local cache")
+                        help="force the official Granola API (needs GRANOLA_API_KEY; "
+                        "used automatically when the key is set)")
+    p_sync.add_argument("--legacy-api", action="store_true", dest="legacy_api",
+                        help="unofficial API with the desktop app's token "
+                        "(pre-encryption Granola installs only)")
     p_sync.set_defaults(func=_cmd_sync)
 
     p_dash = sub.add_parser("dashboard", help="sync, then serve the local dashboard")

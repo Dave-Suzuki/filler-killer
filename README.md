@@ -39,8 +39,22 @@ cd filler-killer
 
 That's it — the script installs [uv](https://docs.astral.sh/uv) if needed, sets
 up everything, and runs `fk doctor`, which checks each prerequisite (Granola
-cache, permissions, on-device speech model) and tells you exactly what to fix
+access, permissions, on-device speech model) and tells you exactly what to fix
 if anything's missing. Re-run `uv run fk doctor` any time.
+
+### Granola access
+
+Granola **≥ 7.427 encrypts all its local data** with a key only Granola itself
+can read, so filler-killer uses the **official Granola API**:
+
+1. In the Granola desktop app, generate an API key (Settings → API keys).
+   On non-Business plans a workspace admin may need to enable personal API
+   keys first.
+2. Add to your shell profile: `export GRANOLA_API_KEY=grn_...`
+3. `uv run fk doctor` to confirm, then `uv run fk dashboard`.
+
+On older Granola installs with a readable local cache (`cache-v3.json` /
+`cache-v6.json`), no key is needed — the cache is read directly.
 
 ## Use
 
@@ -75,7 +89,8 @@ The test suite runs anywhere, but four things can only be verified on your Mac:
 1. **Granola cache format** — run `uv run fk sync`. If it errors or reports 0
    meetings, Granola's undocumented cache format has drifted from the parser in
    `src/fillerkiller/granola/cache_source.py` (fixture:
-   `tests/fixtures/cache-v3.json`). `fk sync --api` is the fallback path.
+   `tests/fixtures/cache-v3.json`) — or your Granola encrypts locally and you
+   need `GRANOLA_API_KEY` (see "Granola access" above; `fk doctor` will say).
 2. **Dashboard sanity** — open a meeting you remember and eyeball the
    highlighted transcript against reality.
 3. **Live listener** — `uv run fk listen --no-menubar`, say "um, you know,
@@ -93,7 +108,8 @@ mic ─> Apple Speech ───┘        (shared)                (localhost:875
 ```
 
 - `detector/` — pure-function filler engine shared by both paths
-- `granola/` — local-cache parser (primary), unofficial-API fallback
+- `granola/` — official-API source (GRANOLA_API_KEY), local-cache parser for
+  older installs, legacy unofficial-API fallback
 - `store/`, `sync.py` — incremental SQLite persistence
 - `dashboard/` — FastAPI + Chart.js local web app
 - `realtime/` — Apple Speech adapter, session counter, rumps menu bar

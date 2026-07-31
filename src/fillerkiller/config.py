@@ -6,11 +6,28 @@ from pathlib import Path
 APP_NAME = "filler-killer"
 
 
+def granola_dir() -> Path:
+    return Path.home() / "Library" / "Application Support" / "Granola"
+
+
 def granola_cache_path() -> Path:
     env = os.environ.get("FK_GRANOLA_CACHE")
     if env:
         return Path(env).expanduser()
-    return Path.home() / "Library" / "Application Support" / "Granola" / "cache-v3.json"
+    # Granola bumped its cache filename over time; prefer whichever exists.
+    for name in ("cache-v3.json", "cache-v6.json"):
+        candidate = granola_dir() / name
+        if candidate.exists():
+            return candidate
+    return granola_dir() / "cache-v3.json"
+
+
+def granola_api_key() -> str | None:
+    return os.environ.get("GRANOLA_API_KEY")
+
+
+def granola_api_base() -> str:
+    return os.environ.get("FK_GRANOLA_API_BASE", "https://public-api.granola.ai/v1")
 
 
 def granola_supabase_path() -> Path:
