@@ -35,6 +35,7 @@ final class AppModel: ObservableObject {
     @Published var lastHits: [String] = []
     @Published var savedSessions = 0
     @Published var importedMeetings = 0
+    @Published var events: [String] = [] // rolling speech-engine diagnostics
 
     private var counter = LiveSessionCounter()
     private var transcriber: SpeechTranscriber?
@@ -97,9 +98,13 @@ final class AppModel: ObservableObject {
                 try recorder.begin()
                 self.recorder = recorder
             }
+            events = []
             let transcriber = try SpeechTranscriber()
             transcriber.onFinal = { [weak self] text in
                 DispatchQueue.main.async { self?.ingest(text) }
+            }
+            transcriber.onEvent = { [weak self] event in
+                DispatchQueue.main.async { self?.pushEvent(event) }
             }
             try transcriber.start()
             self.transcriber = transcriber
@@ -124,6 +129,13 @@ final class AppModel: ObservableObject {
         rate = counter.per100Words
         if !newHits.isEmpty {
             lastHits = newHits.map { $0.term }
+        }
+    }
+
+    private func pushEvent(_ event: String) {
+        events.append(event)
+        if events.count > 6 {
+            events.removeFirst(events.count - 6)
         }
     }
 
@@ -182,6 +194,12 @@ struct SessionMenu: View {
             }
             Button("End & Save") { model.endSession(save: true) }
             Button("Discard Session") { model.endSession(save: false) }
+            if !model.events.isEmpty {
+                Divider()
+                ForEach(Array(model.events.enumerated()), id: \.offset) { _, event in
+                    Text(event)
+                }
+            }
         }
         if !model.status.isEmpty {
             Divider()

@@ -39,6 +39,10 @@ public final class SpeechTranscriber: @unchecked Sendable {
     /// Called with each finalized utterance. Delivered on the main queue
     /// (SFSpeechRecognizer's default handler queue).
     public var onFinal: ((String) -> Void)?
+    /// Terse diagnostic events ("audio flowing", "heard: ...", errors,
+    /// restarts) delivered on the main queue — shown in the menu so field
+    /// failures are debuggable without a debugger.
+    public var onEvent: ((String) -> Void)?
     public private(set) var onDevice: Bool
 
     // Bias recognition toward the tokens we count (helps, not verbatim).
@@ -55,6 +59,14 @@ public final class SpeechTranscriber: @unchecked Sendable {
     private var running = false
     private var consecutiveEmptyRestarts = 0
     private var configObserver: NSObjectProtocol?
+    private var audioFlowing = false
+    private var restartCount = 0
+
+    private func emit(_ event: String) {
+        DispatchQueue.main.async { [weak self] in
+            self?.onEvent?(event)
+        }
+    }
 
     public init(locale: Locale = Locale(identifier: "en-US")) throws {
         guard let recognizer = SFSpeechRecognizer(locale: locale),
@@ -82,6 +94,7 @@ public final class SpeechTranscriber: @unchecked Sendable {
                 "Could not start the microphone: \(error.localizedDescription). "
                 + "Check the Microphone permission in System Settings → Privacy & Security.")
         }
+        emit("engine running (\(onDevice ? "on-device" : "server") recognition)")
         configObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange,
             object: engine,
@@ -120,8 +133,13 @@ public final class SpeechTranscriber: @unchecked Sendable {
         let node = engine.inputNode
         let format = node.outputFormat(forBus: 0) // never hardcode a sample rate
         // Realtime audio thread: append the buffer, nothing else.
+        emit("mic format: \(Int(format.sampleRate)) Hz, \(format.channelCount) ch")
         node.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             guard let self else { return }
+            if !self.audioFlowing {
+                self.audioFlowing = true
+                self.emit("audio flowing from mic")
+            }
             self.lock.lock()
             let req = self.request
             self.lock.unlock()
@@ -157,14 +175,20 @@ public final class SpeechTranscriber: @unchecked Sendable {
                     consecutiveEmptyRestarts += 1
                 } else {
                     consecutiveEmptyRestarts = 0
+                    emit("final: …\(text.suffix(36))")
                     onFinal?(text)
                 }
                 restart()
                 return
             }
+            if lastPartial.isEmpty, !text.isEmpty {
+                emit("hearing you…")
+            }
             lastPartial = text
         }
-        if error != nil {
+        if let error {
+            let ns = error as NSError
+            emit("recognizer error \(ns.domain)#\(ns.code): \(ns.localizedDescription.prefix(60))")
             // Routine on silence: commit what we heard, start fresh.
             let pending = lastPartial.trimmingCharacters(in: .whitespacesAndNewlines)
             if pending.isEmpty {
@@ -174,6 +198,13 @@ public final class SpeechTranscriber: @unchecked Sendable {
                 onFinal?(lastPartial)
             }
             lastPartial = ""
+            // On-device recognition failing repeatedly with no speech heard:
+            // fall back to Apple's server recognition rather than spinning.
+            if onDevice, consecutiveEmptyRestarts >= 5, !audioFlowing || lastPartial.isEmpty {
+                onDevice = false
+                consecutiveEmptyRestarts = 0
+                emit("on-device recognition failing — falling back to server recognition")
+            }
             restart()
         }
     }
@@ -186,6 +217,10 @@ public final class SpeechTranscriber: @unchecked Sendable {
         lock.unlock()
         oldTask?.cancel()
         guard running else { return }
+        restartCount += 1
+        if restartCount % 5 == 0 {
+            emit("recognition restarted ×\(restartCount)")
+        }
         if consecutiveEmptyRestarts > 3 {
             // A silent room produces a restart loop; breathe between attempts.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
