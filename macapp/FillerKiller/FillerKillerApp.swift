@@ -18,6 +18,10 @@ struct FillerKillerApp: App {
         } label: {
             Text(model.barTitle)
         }
+        Window("Filler Killer — Trends", id: "retro") {
+            RetroView(model: RetroModel(store: model.sessionStore))
+        }
+        .defaultSize(width: 780, height: 720)
     }
 }
 
@@ -59,6 +63,8 @@ final class AppModel: ObservableObject {
     private var transcriber: SpeechTranscriber?
     private var store: SessionStore?
     private var recorder: LiveSessionRecorder?
+
+    var sessionStore: SessionStore? { store }
 
     init() {
         openStore()
@@ -234,6 +240,7 @@ final class AppModel: ObservableObject {
 
 struct SessionMenu: View {
     @ObservedObject var model: AppModel
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         switch model.state {
@@ -269,6 +276,11 @@ struct SessionMenu: View {
             Text(model.status)
         }
         Divider()
+        Button("Open Trends") {
+            openWindow(id: "retro")
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate(ignoringOtherApps: true)
+        }
         Text(AppModel.versionLine)
         Button("Quit Filler Killer") {
             NSApplication.shared.terminate(nil)
