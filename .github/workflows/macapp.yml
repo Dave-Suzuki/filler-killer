@@ -34,6 +34,7 @@ jobs:
           xcodebuild -project macapp/FillerKiller.xcodeproj \
             -target FillerKiller -configuration Release build \
             SYMROOT="$PWD/macapp/build" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=YES
           # Verify the entitlements actually made it onto the signature —
           # hardened runtime silently denies the mic without audio-input.

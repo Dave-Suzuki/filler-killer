@@ -36,6 +36,15 @@ final class AppModel: ObservableObject {
     @Published var savedSessions = 0
     @Published var importedMeetings = 0
     @Published var events: [String] = [] // rolling speech-engine diagnostics
+    @Published var micLevel: Float = 0
+
+    static let versionLine: String = {
+        let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
+            as? String ?? "?"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion")
+            as? String ?? "?"
+        return "Filler Killer v\(short) (b\(build))"
+    }()
 
     private var counter = LiveSessionCounter()
     private var transcriber: SpeechTranscriber?
@@ -66,8 +75,19 @@ final class AppModel: ObservableObject {
     var barTitle: String {
         switch state {
         case .idle: return "FK —"
-        case .listening: return "FK \(fillerCount)"
+        case .listening: return "FK \(fillerCount) \(levelGlyph)"
         case .paused: return "FK ⏸ \(fillerCount)"
+        }
+    }
+
+    /// Visible proof the mic is being heard, right in the menu bar.
+    private var levelGlyph: String {
+        switch micLevel {
+        case ..<0.02: return "▁"
+        case ..<0.1: return "▂"
+        case ..<0.25: return "▃"
+        case ..<0.5: return "▄"
+        default: return "▅"
         }
     }
 
@@ -105,6 +125,9 @@ final class AppModel: ObservableObject {
             }
             transcriber.onEvent = { [weak self] event in
                 DispatchQueue.main.async { self?.pushEvent(event) }
+            }
+            transcriber.onLevel = { [weak self] level in
+                self?.micLevel = level
             }
             try transcriber.start()
             self.transcriber = transcriber
@@ -196,9 +219,7 @@ struct SessionMenu: View {
             Button("Discard Session") { model.endSession(save: false) }
             if !model.events.isEmpty {
                 Divider()
-                ForEach(Array(model.events.enumerated()), id: \.offset) { _, event in
-                    Text(event)
-                }
+                Text(model.events.joined(separator: "\n"))
             }
         }
         if !model.status.isEmpty {
@@ -206,6 +227,7 @@ struct SessionMenu: View {
             Text(model.status)
         }
         Divider()
+        Text(AppModel.versionLine)
         Button("Quit Filler Killer") {
             NSApplication.shared.terminate(nil)
         }

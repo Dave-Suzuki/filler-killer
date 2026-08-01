@@ -43,6 +43,9 @@ public final class SpeechTranscriber: @unchecked Sendable {
     /// restarts) delivered on the main queue — shown in the menu so field
     /// failures are debuggable without a debugger.
     public var onEvent: ((String) -> Void)?
+    /// Mic input level 0...1, throttled, on the main queue — drives the
+    /// "it can hear me" indicator.
+    public var onLevel: ((Float) -> Void)?
     public private(set) var onDevice: Bool
 
     // Bias recognition toward the tokens we count (helps, not verbatim).
@@ -61,6 +64,8 @@ public final class SpeechTranscriber: @unchecked Sendable {
     private var configObserver: NSObjectProtocol?
     private var audioFlowing = false
     private var restartCount = 0
+    private var sawAnyResult = false
+    private var bufferCount = 0
 
     private func emit(_ event: String) {
         DispatchQueue.main.async { [weak self] in
@@ -95,6 +100,19 @@ public final class SpeechTranscriber: @unchecked Sendable {
                 + "Check the Microphone permission in System Settings → Privacy & Security.")
         }
         emit("engine running (\(onDevice ? "on-device" : "server") recognition)")
+        // Watchdog: audio flowing but zero recognition results usually means
+        // the on-device model isn't actually usable for this process — switch
+        // to server recognition instead of staying silent forever.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+            guard let self, self.running, !self.sawAnyResult else { return }
+            if self.onDevice {
+                self.onDevice = false
+                self.emit("no recognition after 10s — switching to server recognition")
+                self.restart()
+            } else {
+                self.emit("no recognition after 10s (server mode) — check internet / mic input device")
+            }
+        }
         configObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange,
             object: engine,
@@ -140,6 +158,17 @@ public final class SpeechTranscriber: @unchecked Sendable {
                 self.audioFlowing = true
                 self.emit("audio flowing from mic")
             }
+            self.bufferCount += 1
+            if self.bufferCount % 8 == 0, let data = buffer.floatChannelData?[0] {
+                var sum: Float = 0
+                let n = Int(buffer.frameLength)
+                if n > 0 {
+                    for i in 0 ..< n { sum += data[i] * data[i] }
+                    let rms = (sum / Float(n)).squareRoot()
+                    let level = min(1.0, rms * 12)
+                    DispatchQueue.main.async { [weak self] in self?.onLevel?(level) }
+                }
+            }
             self.lock.lock()
             let req = self.request
             self.lock.unlock()
@@ -167,6 +196,9 @@ public final class SpeechTranscriber: @unchecked Sendable {
 
     private func handle(result: SFSpeechRecognitionResult?, error: Error?) {
         guard running else { return }
+        if result != nil {
+            sawAnyResult = true
+        }
         if let result {
             let text = result.bestTranscription.formattedString
             if result.isFinal {
