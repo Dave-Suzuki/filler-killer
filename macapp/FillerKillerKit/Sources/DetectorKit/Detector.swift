@@ -191,6 +191,11 @@ public func analyzeText(
         .map { $0.element }
 }
 
+/// Word count using the same tokenizer as detection (parity with Python).
+public func wordCount(_ text: String) -> Int {
+    tokenize(Array(text.unicodeScalars)).count
+}
+
 /// Analyze only the given speaker's utterances (default: the note-taker).
 public func analyzeUtterances(
     _ utterances: [Utterance],
