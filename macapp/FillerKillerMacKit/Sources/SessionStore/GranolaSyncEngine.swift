@@ -32,7 +32,7 @@ public final class GranolaSyncEngine {
     }
 
     public func sync() async throws -> GranolaSyncStats {
-        let known: [String: String?] = try store.pool.read { db in
+        let known: [String: String?] = try await store.pool.read { db in
             var map: [String: String?] = [:]
             for row in try Row.fetchAll(db, sql: "SELECT id, updated_at FROM meetings") {
                 map[row["id"] as String] = row["updated_at"] as String?
