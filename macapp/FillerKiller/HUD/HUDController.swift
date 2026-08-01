@@ -37,10 +37,11 @@ final class HUDController {
             if counts[term] == nil { order.append(term) }
             counts[term, default: 0] += 1
         }
-        let headline = order.map { term in
+        let parts: [String] = order.map { term -> String in
             let n = counts[term] ?? 1
             return n > 1 ? "“\(term)” ×\(n)" : "“\(term)”"
-        }.joined(separator: " · ")
+        }
+        let headline: String = parts.joined(separator: " · ")
 
         model.isCleanRun = false
         model.headline = headline
