@@ -4,13 +4,13 @@
 
 import Foundation
 
-public struct RawSegment {
+public struct RawSegment: Sendable {
     public let text: String?
     public let source: String?
     public let speakerName: String? // flat string speaker
     public let speakerObject: SpeakerObject?
 
-    public struct SpeakerObject {
+    public struct SpeakerObject: Sendable {
         public let source: String?
         public let attribution: String?
         public let name: String?
@@ -62,7 +62,7 @@ extension RawSegment: Decodable {
 
 /// Tolerant wrapper: non-object entries in a segments array decode as
 /// .invalid and are skipped, mirroring Python's isinstance(seg, dict) guard.
-public enum MaybeSegment: Decodable {
+public enum MaybeSegment: Decodable, Sendable {
     case segment(RawSegment)
     case invalid
 

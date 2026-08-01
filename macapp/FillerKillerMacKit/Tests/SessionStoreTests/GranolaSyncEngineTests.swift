@@ -64,7 +64,7 @@ final class GranolaSyncEngineTests: XCTestCase {
 
         // Vocalized excluded post-hoc; "so" transparency keeps it counted;
         // system speaker not analyzed.
-        try store.pool.read { db in
+        try await store.pool.read { db in
             let terms = try String.fetchAll(
                 db, sql: "SELECT term FROM filler_hits WHERE meeting_id = 'n1' ORDER BY term"
             )
@@ -98,7 +98,7 @@ final class GranolaSyncEngineTests: XCTestCase {
         let stats = try await GranolaSyncEngine(store: store, client: v2).sync()
         XCTAssertEqual(stats, GranolaSyncStats(added: 0, updated: 1, skipped: 0))
         XCTAssertEqual(try store.meetingCount(), 1)
-        try store.pool.read { db in
+        try await store.pool.read { db in
             let title = try String.fetchOne(
                 db, sql: "SELECT title FROM meetings WHERE id = 'n1'"
             )

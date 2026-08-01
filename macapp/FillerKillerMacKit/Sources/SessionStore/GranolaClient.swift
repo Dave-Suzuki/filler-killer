@@ -27,7 +27,7 @@ struct GranolaNotesPage: Decodable {
     let hasMore: Bool?
 }
 
-public struct GranolaNoteDetail: Decodable {
+public struct GranolaNoteDetail: Decodable, Sendable {
     public let id: String?
     public let title: String?
     public let createdAt: String?
