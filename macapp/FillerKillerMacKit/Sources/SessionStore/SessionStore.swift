@@ -21,6 +21,9 @@ public final class SessionStore {
     }
 
     public init(url: URL) throws {
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
         pool = try DatabasePool(path: url.path)
         var migrator = DatabaseMigrator()
         // IF NOT EXISTS throughout: the same migration works on a fresh
