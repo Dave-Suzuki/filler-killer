@@ -37,6 +37,15 @@ final class AppModel: ObservableObject {
     @Published var importedMeetings = 0
     @Published var events: [String] = [] // rolling speech-engine diagnostics
     @Published var micLevel: Float = 0
+    @Published var alertsMuted = false
+    @Published var bestCleanRun = 0
+
+    @AppStorage("targetRate") var targetRate = 3.0
+
+    private let hud = HUDController()
+    private var cleanRunWords = 0
+    private var firedCleanThresholds: Set<Int> = []
+    private static let cleanThresholds = [50, 100, 250, 500]
 
     static let versionLine: String = {
         let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
@@ -113,6 +122,9 @@ final class AppModel: ObservableObject {
             wordCount = 0
             rate = 0
             lastHits = []
+            cleanRunWords = 0
+            bestCleanRun = 0
+            firedCleanThresholds = []
             if let store {
                 let recorder = LiveSessionRecorder(store: store)
                 try recorder.begin()
@@ -144,14 +156,37 @@ final class AppModel: ObservableObject {
 
     private func ingest(_ text: String) {
         guard state == .listening else { return } // paused: drop, don't count
+        let wordsBefore = counter.wordCount
         let newHits = counter.addFinal(text)
         let segmentIdx = counter.segments.count - 1
         try? recorder?.record(segmentIdx: segmentIdx, text: text, at: Date(), hits: newHits)
         fillerCount = counter.fillerCount
         wordCount = counter.wordCount
         rate = counter.per100Words
-        if !newHits.isEmpty {
+
+        if newHits.isEmpty {
+            // Clean run: consecutive words without a filler (positive
+            // reinforcement — each threshold fires once per session).
+            cleanRunWords += counter.wordCount - wordsBefore
+            bestCleanRun = max(bestCleanRun, cleanRunWords)
+            if !alertsMuted,
+               let crossed = Self.cleanThresholds.last(where: {
+                   cleanRunWords >= $0 && !firedCleanThresholds.contains($0)
+               }) {
+                firedCleanThresholds.insert(crossed)
+                hud.flashCleanRun(words: crossed)
+            }
+        } else {
             lastHits = newHits.map { $0.term }
+            cleanRunWords = 0
+            if !alertsMuted {
+                hud.flashFillers(
+                    terms: newHits.map { $0.term },
+                    sessionCount: fillerCount,
+                    rate: rate,
+                    target: targetRate
+                )
+            }
         }
     }
 
@@ -173,6 +208,7 @@ final class AppModel: ObservableObject {
     func endSession(save: Bool) {
         transcriber?.stop()
         transcriber = nil
+        hud.hideNow()
         if save {
             let id = try? recorder?.finish(
                 label: nil,
@@ -212,8 +248,14 @@ struct SessionMenu: View {
             if !model.lastHits.isEmpty {
                 Text("last: " + model.lastHits.joined(separator: ", "))
             }
+            if model.bestCleanRun > 0 {
+                Text("best clean run: \(model.bestCleanRun) words")
+            }
             Button(model.state == .paused ? "Resume" : "Pause") {
                 model.togglePause()
+            }
+            Button(model.alertsMuted ? "Unmute Alerts" : "Mute Alerts") {
+                model.alertsMuted.toggle()
             }
             Button("End & Save") { model.endSession(save: true) }
             Button("Discard Session") { model.endSession(save: false) }
