@@ -103,6 +103,16 @@ public final class SessionStore {
         }
     }
 
+    /// Privacy control: permanently remove every stored row.
+    public func deleteAllData() throws {
+        try pool.write { db in
+            for table in ["filler_hits", "utterances", "meetings",
+                          "live_hits", "live_segments", "live_sessions"] {
+                try db.execute(sql: "DELETE FROM \(table)")
+            }
+        }
+    }
+
     public func savedSessionCount() throws -> Int {
         try pool.read { db in
             try Int.fetchOne(

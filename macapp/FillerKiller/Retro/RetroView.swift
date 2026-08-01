@@ -85,16 +85,22 @@ struct RetroView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    tiles
-                    trendChart
-                    topFillers
-                    itemList
+            Group {
+                if model.items.isEmpty, model.range == .all {
+                    wholeWindowEmpty
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            headerBlock
+                            trendChart
+                            topFillers
+                            itemList
+                        }
+                        .padding(20)
+                    }
                 }
-                .padding(20)
             }
-            .navigationTitle("Filler Killer — Trends")
+            .navigationTitle("Trends")
             .toolbar {
                 Picker("Range", selection: $model.range) {
                     ForEach(RetroRange.allCases, id: \.self) { range in
@@ -115,55 +121,104 @@ struct RetroView: View {
         }
     }
 
-    private var tiles: some View {
-        HStack(spacing: 12) {
-            tile(String(format: "%.2f", model.periodRate), "fillers / 100 words")
-            tile(
-                model.delta.map { String(format: "%+.2f", $0) } ?? "—",
-                "vs previous period",
-                color: (model.delta ?? 0) <= 0 ? .green : .orange
-            )
-            tile("\(model.totalFillers)", "fillers caught")
-            tile("\(model.items.count)", "meetings & sessions")
+    private var wholeWindowEmpty: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "waveform.and.magnifyingglass")
+                .font(.system(size: 40))
+                .foregroundStyle(.secondary)
+            Text("Nothing to see yet — literally.")
+                .font(.system(size: 15, weight: .semibold))
+            Text("Start a session from the menu bar, or connect Granola to "
+                + "analyze past meetings.")
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func tile(_ value: String, _ label: String, color: Color = .primary) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value).font(.system(size: 24, weight: .semibold)).foregroundStyle(color)
-            Text(label).font(.caption).foregroundStyle(.secondary)
+    private var headerBlock: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(String(format: "%.2f", model.periodRate))
+                    .font(.system(size: 40, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(judgment(rate: model.periodRate, target: targetRate))
+                Text("fillers per 100 words")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if let delta = model.delta {
+                    HStack(spacing: 3) {
+                        Image(systemName: delta <= 0 ? "arrow.down.right" : "arrow.up.right")
+                        Text(String(format: "%.2f vs previous period", abs(delta)))
+                    }
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(delta <= 0 ? .green : .orange)
+                }
+            }
+            Text("\(model.totalFillers) fillers caught · \(model.items.count) meetings & sessions")
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
     }
 
     private var trendChart: some View {
-        GroupBox("Filler rate over time (daily average)") {
+        GroupBox("Daily rate") {
             if model.daily.isEmpty {
-                Text("No data in this range yet — start a session or sync Granola.")
+                Text("Quiet week. The chart fills in as you talk.")
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 120)
             } else {
+                let maxRate = model.daily.map { $0.rate }.max() ?? targetRate
                 Chart {
                     ForEach(model.daily) { point in
+                        AreaMark(
+                            x: .value("Day", point.day),
+                            y: .value("Rate", point.rate)
+                        )
+                        .interpolationMethod(.monotone)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color.accentColor.opacity(0.18), .clear],
+                                startPoint: .top, endPoint: .bottom
+                            )
+                        )
                         LineMark(
                             x: .value("Day", point.day),
                             y: .value("Rate", point.rate)
                         )
-                        .interpolationMethod(.catmullRom)
+                        .interpolationMethod(.monotone)
+                        .lineStyle(StrokeStyle(lineWidth: 2))
+                        .foregroundStyle(Color.accentColor)
+                    }
+                    if let last = model.daily.last {
                         PointMark(
-                            x: .value("Day", point.day),
-                            y: .value("Rate", point.rate)
+                            x: .value("Day", last.day),
+                            y: .value("Rate", last.rate)
                         )
-                        .symbolSize(20)
+                        .symbolSize(30)
+                        .foregroundStyle(Color.accentColor)
                     }
                     RuleMark(y: .value("Target", targetRate))
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
                         .foregroundStyle(.secondary)
+                        .annotation(position: .trailing, alignment: .leading) {
+                            Text(String(format: "goal %.1f", targetRate))
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                }
+                .chartYScale(domain: 0 ... max(maxRate, targetRate) * 1.15)
+                .chartYAxis {
+                    AxisMarks(values: .automatic(desiredCount: 3)) {
+                        AxisGridLine().foregroundStyle(.quaternary)
+                        AxisValueLabel()
+                    }
                 }
                 .chartXAxis {
-                    AxisMarks(values: .automatic(desiredCount: 6))
+                    AxisMarks(values: .automatic(desiredCount: 5)) {
+                        AxisValueLabel()
+                    }
                 }
                 .frame(minHeight: 180)
             }
@@ -171,16 +226,27 @@ struct RetroView: View {
     }
 
     private var topFillers: some View {
-        GroupBox("Top fillers") {
+        GroupBox("Your favorite words") {
             if model.topTerms.isEmpty {
-                Text("Nothing yet.").foregroundStyle(.secondary)
+                Text("No favorites yet — that's the goal, actually.")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 Chart(model.topTerms) { term in
                     BarMark(
                         x: .value("Count", term.count),
                         y: .value("Term", term.term)
                     )
+                    .foregroundStyle(Color.accentColor.opacity(0.85))
+                    .cornerRadius(3)
+                    .annotation(position: .trailing) {
+                        Text("\(term.count)")
+                            .font(.system(size: 11))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
                 }
+                .chartXAxis(.hidden)
                 .frame(minHeight: CGFloat(model.topTerms.count) * 26 + 30)
             }
         }
@@ -194,19 +260,28 @@ struct RetroView: View {
             LazyVStack(spacing: 0) {
                 ForEach(model.items) { item in
                     NavigationLink(value: item.id) {
-                        HStack {
-                            Text(item.source == .live ? "🎙" : "G")
-                                .frame(width: 22)
-                            VStack(alignment: .leading) {
+                        HStack(spacing: 10) {
+                            Image(systemName: item.source == .live
+                                ? "waveform.circle.fill" : "calendar.circle.fill")
+                                .font(.system(size: 16))
+                                .foregroundStyle(item.source == .live
+                                    ? Color.accentColor : Color.secondary)
+                            VStack(alignment: .leading, spacing: 1) {
                                 Text(item.title).lineLimit(1)
                                 Text(item.day).font(.caption).foregroundStyle(.secondary)
                             }
                             Spacer()
-                            Text("\(item.fillers) · " + String(format: "%.2f", item.rate) + "/100w")
-                                .font(.callout.monospacedDigit())
-                                .foregroundStyle(item.rate <= targetRate ? .green : .secondary)
+                            VStack(alignment: .trailing, spacing: 1) {
+                                Text("\(item.fillers) fillers")
+                                    .font(.system(size: 13))
+                                    .monospacedDigit()
+                                Text(String(format: "%.1f / 100w", item.rate))
+                                    .font(.system(size: 11))
+                                    .monospacedDigit()
+                                    .foregroundStyle(judgment(rate: item.rate, target: targetRate))
+                            }
                         }
-                        .padding(.vertical, 6)
+                        .padding(.vertical, 8)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -239,7 +314,7 @@ struct TranscriptView: View {
                     }
                 }
                 if lines.isEmpty {
-                    Text("No transcript stored for this item.")
+                    Text("No transcript was stored for this one.")
                         .foregroundStyle(.secondary)
                 }
             }

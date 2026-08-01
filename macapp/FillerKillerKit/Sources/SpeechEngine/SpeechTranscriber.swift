@@ -35,6 +35,20 @@ public struct SpeechEngineError: LocalizedError {
     public var errorDescription: String? { message }
 }
 
+/// On-device recognition isn't available and the caller hasn't been granted
+/// consent to use Apple's servers. The app must ask the user explicitly —
+/// the privacy promise is "nothing leaves your Mac" and silent fallback
+/// would break it.
+public struct OnDeviceUnavailableError: LocalizedError {
+    public var errorDescription: String? {
+        "On-device speech recognition isn't available yet. Enable Dictation "
+            + "once (System Settings → Keyboard → Dictation) to download "
+            + "Apple's offline model."
+    }
+
+    public init() {}
+}
+
 public final class SpeechTranscriber: @unchecked Sendable {
     /// Called with each finalized utterance. Delivered on the main queue
     /// (SFSpeechRecognizer's default handler queue).
@@ -73,17 +87,24 @@ public final class SpeechTranscriber: @unchecked Sendable {
         }
     }
 
-    public init(locale: Locale = Locale(identifier: "en-US")) throws {
+    /// `allowServer` must reflect an EXPLICIT user consent stored by the app.
+    /// Without it, the engine refuses to run when the on-device model is
+    /// missing rather than silently sending audio to Apple.
+    public init(
+        locale: Locale = Locale(identifier: "en-US"),
+        allowServer: Bool = false
+    ) throws {
         guard let recognizer = SFSpeechRecognizer(locale: locale),
               recognizer.isAvailable
         else {
             throw SpeechEngineError(message:
-                "Speech recognition is unavailable for English. Enable Dictation "
-                + "once (System Settings → Keyboard → Dictation) to download the "
-                + "on-device model, then try again.")
+                "Speech recognition is unavailable for English on this Mac.")
         }
         self.recognizer = recognizer
         onDevice = recognizer.supportsOnDeviceRecognition
+        if !onDevice, !allowServer {
+            throw OnDeviceUnavailableError()
+        }
     }
 
     public func start() throws {
@@ -100,18 +121,13 @@ public final class SpeechTranscriber: @unchecked Sendable {
                 + "Check the Microphone permission in System Settings → Privacy & Security.")
         }
         emit("engine running (\(onDevice ? "on-device" : "server") recognition)")
-        // Watchdog: audio flowing but zero recognition results usually means
-        // the on-device model isn't actually usable for this process — switch
-        // to server recognition instead of staying silent forever.
+        // Watchdog: report a stall, but NEVER silently change where audio
+        // goes — recognition mode is a user decision, not a fallback.
         DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
             guard let self, self.running, !self.sawAnyResult else { return }
-            if self.onDevice {
-                self.onDevice = false
-                self.emit("no recognition after 10s — switching to server recognition")
-                self.restart()
-            } else {
-                self.emit("no recognition after 10s (server mode) — check internet / mic input device")
-            }
+            self.emit(self.audioFlowing
+                ? "no recognition after 10s — the speech model may be missing (enable Dictation once in System Settings → Keyboard)"
+                : "no audio from the mic after 10s — check the input device in System Settings → Sound")
         }
         configObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange,
@@ -230,13 +246,6 @@ public final class SpeechTranscriber: @unchecked Sendable {
                 onFinal?(lastPartial)
             }
             lastPartial = ""
-            // On-device recognition failing repeatedly with no speech heard:
-            // fall back to Apple's server recognition rather than spinning.
-            if onDevice, consecutiveEmptyRestarts >= 5, !audioFlowing || lastPartial.isEmpty {
-                onDevice = false
-                consecutiveEmptyRestarts = 0
-                emit("on-device recognition failing — falling back to server recognition")
-            }
             restart()
         }
     }

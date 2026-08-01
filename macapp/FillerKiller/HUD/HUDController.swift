@@ -19,7 +19,8 @@ final class HUDPanel: NSPanel {
 @MainActor
 final class HUDContentModel: ObservableObject {
     @Published var headline = ""
-    @Published var detail = ""
+    @Published var detailPrefix = ""
+    @Published var detailRate = ""
     @Published var isCleanRun = false
     @Published var rateColor: Color = .secondary
 }
@@ -45,16 +46,17 @@ final class HUDController {
 
         model.isCleanRun = false
         model.headline = headline
-        model.detail = "\(sessionCount) this session · "
-            + String(format: "%.1f", rate) + "/100w"
-        model.rateColor = rate <= target ? .green : (rate <= target * 1.5 ? .orange : .red)
+        model.detailPrefix = "\(sessionCount) this session · "
+        model.detailRate = String(format: "%.1f", rate) + " per 100"
+        model.rateColor = judgment(rate: rate, target: target)
         show(holdFor: terms.count >= 3 ? 2.6 : 1.8)
     }
 
     func flashCleanRun(words: Int) {
         model.isCleanRun = true
-        model.headline = "✓ \(words) clean words"
-        model.detail = "keep going"
+        model.headline = "\(words) clean words"
+        model.detailPrefix = "Keep it rolling"
+        model.detailRate = ""
         model.rateColor = .green
         show(holdFor: 1.2)
     }
@@ -127,7 +129,7 @@ final class HUDController {
         let frame = screen.visibleFrame
         let origin = NSPoint(
             x: frame.midX - size.width / 2,
-            y: frame.maxY - size.height - 12
+            y: frame.maxY - size.height - 16
         )
         panel.setFrame(NSRect(origin: origin, size: size), display: true)
     }
@@ -137,20 +139,34 @@ struct HUDView: View {
     @ObservedObject var model: HUDContentModel
 
     var body: some View {
-        VStack(spacing: 2) {
-            Text(model.headline)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(model.isCleanRun ? Color.green : Color.primary)
-            Text(model.detail)
-                .font(.system(size: 11))
-                .foregroundStyle(model.rateColor)
+        VStack(spacing: 3) {
+            HStack(spacing: 5) {
+                if model.isCleanRun {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.green)
+                }
+                Text(model.headline)
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundStyle(model.isCleanRun ? Color.green : Color.primary)
+            }
+            HStack(spacing: 0) {
+                Text(model.detailPrefix)
+                    .foregroundStyle(.secondary)
+                Text(model.detailRate)
+                    .foregroundStyle(model.rateColor)
+            }
+            .font(.system(size: 12, weight: .medium, design: .rounded))
+            .monospacedDigit()
+            .contentTransition(.numericText())
+            .animation(.default, value: model.detailPrefix)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 11)
         .background(.regularMaterial, in: Capsule())
         .overlay(
             Capsule().strokeBorder(
-                model.isCleanRun ? Color.green.opacity(0.5) : Color.primary.opacity(0.1),
+                model.isCleanRun ? Color.green.opacity(0.45) : Color.primary.opacity(0.08),
                 lineWidth: 1
             )
         )
