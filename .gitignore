@@ -11,5 +11,6 @@ fk.db
 macapp/FillerKiller.xcodeproj/
 macapp/build/
 macapp/FillerKiller/Info.plist
+macapp/FillerKiller/FillerKiller.entitlements
 .build/
 .swiftpm/

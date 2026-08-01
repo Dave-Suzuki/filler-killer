@@ -35,6 +35,10 @@ jobs:
             -target FillerKiller -configuration Release build \
             SYMROOT="$PWD/macapp/build" \
             CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=YES
+          # Verify the entitlements actually made it onto the signature —
+          # hardened runtime silently denies the mic without audio-input.
+          codesign -d --entitlements - macapp/build/Release/FillerKiller.app \
+            | grep -q "com.apple.security.device.audio-input"
       - name: Zip artifact
         run: |
           cd macapp/build/Release
@@ -49,6 +53,7 @@ jobs:
           zip -q FillerKiller-app.zip README-INSTALL.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: FillerKiller-dev-build
+          # Unique per run so repeated downloads never collide as "(2).zip".
+          name: FillerKiller-b${{ github.run_number }}
           path: macapp/build/Release/FillerKiller-app.zip
           retention-days: 14

@@ -29,6 +29,11 @@ targets:
         product: SpeechEngine
       - package: FillerKillerMacKit
         product: SessionStore
+    entitlements:
+      path: FillerKiller/FillerKiller.entitlements
+      properties:
+        # Hardened runtime auto-denies the mic (no prompt at all) without this.
+        com.apple.security.device.audio-input: true
     info:
       path: FillerKiller/Info.plist
       properties:
