@@ -38,7 +38,7 @@ targets:
       path: FillerKiller/Info.plist
       properties:
         CFBundleDisplayName: Filler Killer
-        CFBundleShortVersionString: "0.5.0"
+        CFBundleShortVersionString: "0.6.0"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         LSUIElement: true
         LSMinimumSystemVersion: "14.0"
@@ -51,7 +51,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.davesuzuki.FillerKiller
-        MARKETING_VERSION: "0.5.0"
+        MARKETING_VERSION: "0.6.0"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.9"
         ENABLE_HARDENED_RUNTIME: true

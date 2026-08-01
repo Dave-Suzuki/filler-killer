@@ -22,6 +22,10 @@ struct FillerKillerApp: App {
             RetroView(model: RetroModel(store: model.sessionStore))
         }
         .defaultSize(width: 780, height: 720)
+        Window("Connect Granola", id: "granola") {
+            GranolaConnectView(model: model)
+        }
+        .defaultSize(width: 420, height: 220)
     }
 }
 
@@ -66,8 +70,66 @@ final class AppModel: ObservableObject {
 
     var sessionStore: SessionStore? { store }
 
+    @Published var granolaConnected = GranolaKeychain.load() != nil
+    @Published var granolaStatus = ""
+    private var granolaTimer: Timer?
+    private var syncing = false
+
+    func startGranolaSchedule() {
+        guard granolaConnected else { return }
+        syncGranolaNow()
+        granolaTimer?.invalidate()
+        granolaTimer = Timer.scheduledTimer(
+            withTimeInterval: 6 * 3600, repeats: true
+        ) { [weak self] _ in
+            Task { @MainActor in self?.syncGranolaNow() }
+        }
+    }
+
+    func syncGranolaNow() {
+        guard !syncing, let store, let key = GranolaKeychain.load() else { return }
+        syncing = true
+        granolaStatus = "Syncing Granola…"
+        let engine = GranolaSyncEngine(store: store, client: GranolaClient(apiKey: key))
+        Task {
+            do {
+                let stats = try await engine.sync()
+                self.granolaStatus =
+                    "Granola: +\(stats.added) new, \(stats.updated) updated, \(stats.skipped) unchanged"
+                self.importedMeetings = (try? store.meetingCount()) ?? self.importedMeetings
+            } catch {
+                self.granolaStatus = "Granola sync failed: \(error.localizedDescription)"
+            }
+            self.syncing = false
+        }
+    }
+
+    func connectGranola(key: String) async -> String? {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("grn_") else {
+            return "That doesn't look like a Granola API key (grn_…)."
+        }
+        do {
+            _ = try await GranolaClient(apiKey: trimmed).ping()
+        } catch {
+            return error.localizedDescription
+        }
+        GranolaKeychain.save(trimmed)
+        granolaConnected = true
+        startGranolaSchedule()
+        return nil
+    }
+
+    func disconnectGranola() {
+        GranolaKeychain.delete()
+        granolaConnected = false
+        granolaTimer?.invalidate()
+        granolaStatus = ""
+    }
+
     init() {
         openStore()
+        startGranolaSchedule()
     }
 
     private func openStore() {
@@ -280,6 +342,18 @@ struct SessionMenu: View {
             openWindow(id: "retro")
             NSApp.setActivationPolicy(.regular)
             NSApp.activate(ignoringOtherApps: true)
+        }
+        if model.granolaConnected {
+            Button("Sync Granola Now") { model.syncGranolaNow() }
+            if !model.granolaStatus.isEmpty {
+                Text(model.granolaStatus)
+            }
+        } else {
+            Button("Connect Granola…") {
+                openWindow(id: "granola")
+                NSApp.setActivationPolicy(.regular)
+                NSApp.activate(ignoringOtherApps: true)
+            }
         }
         Text(AppModel.versionLine)
         Button("Quit Filler Killer") {
