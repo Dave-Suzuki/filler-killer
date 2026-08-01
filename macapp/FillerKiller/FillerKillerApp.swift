@@ -286,8 +286,10 @@ final class AppModel: ObservableObject {
             )
             savedSessions = (try? store?.savedSessionCount()) ?? savedSessions
             if let id {
-                status = "Session #\(id) saved: \(fillerCount) fillers in "
-                    + "\(wordCount) words (\(rate)/100w)."
+                // Lead with the positive: personal-best framing sticks.
+                let lead = bestCleanRun > 0 ? "Best clean run: \(bestCleanRun) words. " : ""
+                status = lead + "Session #\(id) saved: \(fillerCount) fillers in "
+                    + "\(wordCount) words (" + String(format: "%.2f", rate) + "/100w)."
             } else {
                 status = "Session ended (not saved — storage unavailable)."
             }
