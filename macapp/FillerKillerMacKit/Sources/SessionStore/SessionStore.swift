@@ -134,6 +134,17 @@ public enum LegacyImport {
             at: destination.deletingLastPathComponent(), withIntermediateDirectories: true
         )
         try fm.copyItem(at: source, to: destination)
+        // A WAL-mode database keeps recent writes in sidecar files; copying
+        // only the main file would silently drop them.
+        for suffix in ["-wal", "-shm"] {
+            let sidecar = URL(fileURLWithPath: source.path + suffix)
+            if fm.fileExists(atPath: sidecar.path) {
+                try fm.copyItem(
+                    at: sidecar,
+                    to: URL(fileURLWithPath: destination.path + suffix)
+                )
+            }
+        }
         return true
     }
 }
