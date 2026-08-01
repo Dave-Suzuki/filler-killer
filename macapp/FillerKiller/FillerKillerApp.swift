@@ -1,8 +1,10 @@
 // Filler Killer — macOS menu bar app.
-// M2: live listening. Start a session from the menu bar; the count ticks as
-// you speak. Sessions are in-memory for now (persistence lands in M3).
+// M3: sessions persist. Segments are written incrementally (crash-safe), End
+// & Save finalizes, Discard deletes. The Python tool's fk.db imports on first
+// launch as a file copy.
 
 import SessionKit
+import SessionStore
 import SpeechEngine
 import SwiftUI
 
@@ -31,9 +33,34 @@ final class AppModel: ObservableObject {
     @Published var wordCount = 0
     @Published var rate = 0.0
     @Published var lastHits: [String] = []
+    @Published var savedSessions = 0
+    @Published var importedMeetings = 0
 
     private var counter = LiveSessionCounter()
     private var transcriber: SpeechTranscriber?
+    private var store: SessionStore?
+    private var recorder: LiveSessionRecorder?
+
+    init() {
+        openStore()
+    }
+
+    private func openStore() {
+        do {
+            let url = try SessionStore.defaultURL()
+            let imported = try LegacyImport.importIfNeeded(to: url)
+            let store = try SessionStore(url: url)
+            self.store = store
+            savedSessions = (try? store.savedSessionCount()) ?? 0
+            importedMeetings = (try? store.meetingCount()) ?? 0
+            if imported {
+                status = "Imported your existing filler-killer data: "
+                    + "\(importedMeetings) meetings, \(savedSessions) sessions."
+            }
+        } catch {
+            status = "Storage unavailable: \(error.localizedDescription)"
+        }
+    }
 
     var barTitle: String {
         switch state {
@@ -65,10 +92,13 @@ final class AppModel: ObservableObject {
             wordCount = 0
             rate = 0
             lastHits = []
+            if let store {
+                let recorder = LiveSessionRecorder(store: store)
+                try recorder.begin()
+                self.recorder = recorder
+            }
             let transcriber = try SpeechTranscriber()
             transcriber.onFinal = { [weak self] text in
-                // SFSpeechRecognizer delivers on the main queue already, but
-                // hop explicitly so this stays correct if that ever changes.
                 DispatchQueue.main.async { self?.ingest(text) }
             }
             try transcriber.start()
@@ -78,6 +108,8 @@ final class AppModel: ObservableObject {
                 ? "Listening — on-device recognition"
                 : "Listening — server recognition (enable Dictation once for on-device)"
         } catch {
+            try? recorder?.discard()
+            recorder = nil
             status = error.localizedDescription
         }
     }
@@ -85,6 +117,8 @@ final class AppModel: ObservableObject {
     private func ingest(_ text: String) {
         guard state == .listening else { return } // paused: drop, don't count
         let newHits = counter.addFinal(text)
+        let segmentIdx = counter.segments.count - 1
+        try? recorder?.record(segmentIdx: segmentIdx, text: text, at: Date(), hits: newHits)
         fillerCount = counter.fillerCount
         wordCount = counter.wordCount
         rate = counter.per100Words
@@ -101,11 +135,28 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func endSession() {
+    func endSession(save: Bool) {
         transcriber?.stop()
         transcriber = nil
-        status = "Session ended: \(fillerCount) fillers in \(wordCount) words "
-            + "(\(rate)/100w). Saving arrives in the next build."
+        if save {
+            let id = try? recorder?.finish(
+                label: nil,
+                wordCount: counter.wordCount,
+                fillerCount: counter.fillerCount,
+                per100Words: counter.per100Words
+            )
+            savedSessions = (try? store?.savedSessionCount()) ?? savedSessions
+            if let id {
+                status = "Session #\(id) saved: \(fillerCount) fillers in "
+                    + "\(wordCount) words (\(rate)/100w)."
+            } else {
+                status = "Session ended (not saved — storage unavailable)."
+            }
+        } else {
+            try? recorder?.discard()
+            status = "Session discarded."
+        }
+        recorder = nil
         state = .idle
     }
 }
@@ -117,6 +168,9 @@ struct SessionMenu: View {
         switch model.state {
         case .idle:
             Button("Start Session") { model.startSession() }
+            if model.savedSessions > 0 || model.importedMeetings > 0 {
+                Text("\(model.savedSessions) sessions · \(model.importedMeetings) meetings stored")
+            }
         case .listening, .paused:
             Text("\(model.fillerCount) fillers · \(model.wordCount) words · "
                 + String(format: "%.2f", model.rate) + "/100w")
@@ -126,7 +180,8 @@ struct SessionMenu: View {
             Button(model.state == .paused ? "Resume" : "Pause") {
                 model.togglePause()
             }
-            Button("End Session") { model.endSession() }
+            Button("End & Save") { model.endSession(save: true) }
+            Button("Discard Session") { model.endSession(save: false) }
         }
         if !model.status.isEmpty {
             Divider()

@@ -27,6 +27,8 @@ jobs:
         run: xcodegen generate --spec macapp/project.yml --project macapp
       - name: Package tests (incl. golden parity)
         run: swift test --package-path macapp/FillerKillerKit
+      - name: Mac-only package tests (SessionStore/GRDB)
+        run: swift test --package-path macapp/FillerKillerMacKit
       - name: Build app (Release, ad-hoc signed)
         run: |
           xcodebuild -project macapp/FillerKiller.xcodeproj \
