@@ -11,10 +11,17 @@ AVAudioEngine tap keeps running; the only loss window is the attribute swap
 between requests. Partial results rewrite the whole utterance each time, so
 fillers are counted from finalized text only; on an error-restart the last
 partial is committed as final so words aren't dropped.
+
+Newer macOS builds add a third case: on-device recognition can amend the
+partial forever without EVER finalizing or erroring, so a timer commits any
+partial that has stopped changing for ~1.75s (see stabilizer.py) and
+restarts the request.
 """
 
 import sys
 import time
+
+from fillerkiller.realtime.stabilizer import PartialStabilizer
 
 
 def ensure_authorized(timeout: float = 120.0) -> None:
@@ -79,6 +86,8 @@ class SpeechTranscriber:
         self.request = None
         self.task = None
         self._last_partial = ""
+        self._stabilizer = PartialStabilizer()
+        self._timer = None
         self._running = False
 
         # Tap runs on the realtime audio thread: append the buffer, nothing else.
@@ -98,24 +107,32 @@ class SpeechTranscriber:
             req.setRequiresOnDeviceRecognition_(True)
         req.setContextualStrings_(self._CONTEXT)
         self._last_partial = ""
+        self._stabilizer.reset()
 
         def handler(result, error):
-            if not self._running:
+            # A cancelled request can still deliver late results/errors;
+            # acting on them would double-commit or cancel the current task.
+            if not self._running or self.request is not req:
                 return
             if result is not None:
                 text = str(result.bestTranscription().formattedString())
                 if result.isFinal():
                     self._last_partial = ""
+                    self._stabilizer.reset()
                     if text.strip():
                         self.on_final(text)
                     self._restart()
                     return
                 self._last_partial = text
+                self._stabilizer.observe(text, time.monotonic())
             if error is not None:
                 # Routine on silence (203 retry / 1110 no speech): commit what
                 # we heard, then start a fresh request.
-                if self._last_partial.strip():
-                    self.on_final(self._last_partial)
+                pending = self._last_partial.strip()
+                self._last_partial = ""
+                self._stabilizer.reset()
+                if pending:
+                    self.on_final(pending)
                 self._restart()
 
         self._handler = handler  # keep a reference (GC)
@@ -130,7 +147,21 @@ class SpeechTranscriber:
         if self._running:
             self._start_request()
 
+    def _commit_stable(self) -> None:
+        """Timer tick: a partial that has stopped changing IS the final —
+        some on-device configurations never send isFinal or an error."""
+        if not self._running:
+            return
+        stable = self._stabilizer.take_stable(time.monotonic())
+        if stable is None:
+            return
+        self._last_partial = ""
+        self.on_final(stable)
+        self._restart()
+
     def start(self) -> None:
+        from Foundation import NSTimer
+
         self._running = True
         self._start_request()
         self.engine.prepare()
@@ -141,12 +172,20 @@ class SpeechTranscriber:
                 f"Could not start the audio engine: {err}. Check the Microphone "
                 "permission for your terminal app."
             )
+        # Keep a reference or PyObjC GC silently kills the timer block.
+        self._timer = NSTimer.scheduledTimerWithTimeInterval_repeats_block_(
+            0.4, True, lambda _timer: self._commit_stable()
+        )
 
     def stop(self) -> None:
         self._running = False
+        if self._timer is not None:
+            self._timer.invalidate()
+            self._timer = None
         if self._last_partial.strip():
             self.on_final(self._last_partial)
             self._last_partial = ""
+        self._stabilizer.reset()
         try:
             self._node.removeTapOnBus_(0)
         except Exception:

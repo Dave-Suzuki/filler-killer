@@ -292,7 +292,11 @@ final class AppModel: ObservableObject {
     func togglePause() {
         switch state {
         case .listening:
-            transcriber?.stop()
+            // stop() returns un-finalized speech; count it before pausing so
+            // the words right before the pause aren't dropped.
+            if let pending = transcriber?.stop() {
+                ingest(pending)
+            }
             transcriber = nil
             micLevel = 0
             state = .paused
@@ -306,7 +310,11 @@ final class AppModel: ObservableObject {
     }
 
     func endSession(save: Bool) {
-        transcriber?.stop()
+        // Count pending speech BEFORE teardown: stop() returns it because an
+        // async onFinal delivery would arrive after the session is saved.
+        if let pending = transcriber?.stop(), state == .listening {
+            ingest(pending)
+        }
         transcriber = nil
         micLevel = 0
         hud.hideNow()

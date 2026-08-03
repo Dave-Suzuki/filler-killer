@@ -17,5 +17,8 @@ let package = Package(
         .target(name: "SpeechEngine"),
         .testTarget(name: "DetectorKitTests", dependencies: ["DetectorKit"]),
         .testTarget(name: "SessionKitTests", dependencies: ["SessionKit"]),
+        // PartialStabilizer is pure Swift, so these run on Linux CI even
+        // though the transcriber itself is compiled out there.
+        .testTarget(name: "SpeechEngineTests", dependencies: ["SpeechEngine"]),
     ]
 )

@@ -3,6 +3,9 @@
 //   - on isFinal: emit text, start a fresh recognition request
 //   - on error (routine on silence, kAFAssistantErrorDomain 203/1110):
 //     commit the last partial as final, restart
+//   - STABILITY COMMIT: newer macOS on-device recognition can amend a partial
+//     forever without EVER delivering isFinal or a silence error; a partial
+//     unchanged for ~1.75s is committed as final and recognition restarts
 //   - the AVAudioEngine tap NEVER stops between restarts; the only loss
 //     window is the lock-guarded request swap
 // New beyond the prototype: restart backoff after consecutive empty restarts,
@@ -66,6 +69,7 @@ public final class SpeechTranscriber: @unchecked Sendable {
     private static let contextualStrings = [
         "um", "uh", "you know", "kind of", "sort of", "i mean", "basically",
     ]
+    private static let stabilityTick: TimeInterval = 0.4
 
     private let recognizer: SFSpeechRecognizer
     private let engine = AVAudioEngine()
@@ -73,6 +77,8 @@ public final class SpeechTranscriber: @unchecked Sendable {
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private var lastPartial = ""
+    private var stabilizer = PartialStabilizer()
+    private var stabilityTimer: DispatchSourceTimer?
     private var running = false
     private var consecutiveEmptyRestarts = 0
     private var configObserver: NSObjectProtocol?
@@ -121,6 +127,15 @@ public final class SpeechTranscriber: @unchecked Sendable {
                 + "Check the Microphone permission in System Settings → Privacy & Security.")
         }
         emit("engine running (\(onDevice ? "on-device" : "server") recognition)")
+        // Some recognizer configurations never finalize on their own; commit
+        // partials that have stopped changing so segments always land.
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(
+            deadline: .now() + Self.stabilityTick, repeating: Self.stabilityTick
+        )
+        timer.setEventHandler { [weak self] in self?.commitStablePartial() }
+        timer.resume()
+        stabilityTimer = timer
         // Watchdog: report a stall, but NEVER silently change where audio
         // goes — recognition mode is a user decision, not a fallback.
         DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
@@ -138,27 +153,34 @@ public final class SpeechTranscriber: @unchecked Sendable {
         }
     }
 
-    public func stop() {
+    /// Stops the engine and returns any pending, un-finalized speech. The
+    /// pending text is RETURNED rather than delivered via onFinal: callers
+    /// tear their session down right after stop(), and an async onFinal
+    /// would land after teardown and be dropped — count the return value
+    /// synchronously instead.
+    @discardableResult
+    public func stop() -> String? {
         running = false
+        stabilityTimer?.cancel()
+        stabilityTimer = nil
         if let observer = configObserver {
             NotificationCenter.default.removeObserver(observer)
             configObserver = nil
         }
-        let pending = lastPartial.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !pending.isEmpty {
-            onFinal?(lastPartial)
-        }
-        lastPartial = ""
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
         lock.lock()
+        let pending = lastPartial.trimmingCharacters(in: .whitespacesAndNewlines)
+        lastPartial = ""
+        stabilizer.reset()
         let req = request
         let tsk = task
         request = nil
         task = nil
         lock.unlock()
+        engine.inputNode.removeTap(onBus: 0)
+        engine.stop()
         req?.endAudio()
         tsk?.cancel()
+        return pending.isEmpty ? nil : pending
     }
 
     // MARK: - Internals
@@ -199,26 +221,38 @@ public final class SpeechTranscriber: @unchecked Sendable {
             newRequest.requiresOnDeviceRecognition = true
         }
         newRequest.contextualStrings = Self.contextualStrings
-        lastPartial = ""
 
         lock.lock()
+        lastPartial = ""
+        stabilizer.reset()
         request = newRequest
         lock.unlock()
 
         task = recognizer.recognitionTask(with: newRequest) { [weak self] result, error in
-            self?.handle(result: result, error: error)
+            self?.handle(result: result, error: error, from: newRequest)
         }
     }
 
-    private func handle(result: SFSpeechRecognitionResult?, error: Error?) {
-        guard running else { return }
+    private func handle(
+        result: SFSpeechRecognitionResult?, error: Error?,
+        from source: SFSpeechAudioBufferRecognitionRequest
+    ) {
+        // A cancelled request can still deliver late results/errors; acting
+        // on them would double-commit text or cancel the CURRENT task.
+        lock.lock()
+        let isCurrent = source === request
+        lock.unlock()
+        guard isCurrent, running else { return }
         if result != nil {
             sawAnyResult = true
         }
         if let result {
             let text = result.bestTranscription.formattedString
             if result.isFinal {
+                lock.lock()
                 lastPartial = ""
+                stabilizer.reset()
+                lock.unlock()
                 if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     consecutiveEmptyRestarts += 1
                 } else {
@@ -229,25 +263,49 @@ public final class SpeechTranscriber: @unchecked Sendable {
                 restart()
                 return
             }
-            if lastPartial.isEmpty, !text.isEmpty {
+            lock.lock()
+            let firstPartial = lastPartial.isEmpty && !text.isEmpty
+            lastPartial = text
+            stabilizer.observe(text, at: Date())
+            lock.unlock()
+            if firstPartial {
                 emit("hearing you…")
             }
-            lastPartial = text
         }
         if let error {
             let ns = error as NSError
             emit("recognizer error \(ns.domain)#\(ns.code): \(ns.localizedDescription.prefix(60))")
             // Routine on silence: commit what we heard, start fresh.
+            lock.lock()
             let pending = lastPartial.trimmingCharacters(in: .whitespacesAndNewlines)
+            lastPartial = ""
+            stabilizer.reset()
+            lock.unlock()
             if pending.isEmpty {
                 consecutiveEmptyRestarts += 1
             } else {
                 consecutiveEmptyRestarts = 0
-                onFinal?(lastPartial)
+                onFinal?(pending)
             }
-            lastPartial = ""
             restart()
         }
+    }
+
+    /// Timer tick: a partial that has stopped changing IS the final — some
+    /// on-device configurations never send isFinal or a silence error.
+    private func commitStablePartial() {
+        guard running else { return }
+        lock.lock()
+        let stable = stabilizer.takeStable(at: Date())
+        if stable != nil {
+            lastPartial = ""
+        }
+        lock.unlock()
+        guard let stable else { return }
+        consecutiveEmptyRestarts = 0
+        emit("final (stable after pause): …\(stable.suffix(36))")
+        onFinal?(stable)
+        restart()
     }
 
     private func restart() {
@@ -278,10 +336,13 @@ public final class SpeechTranscriber: @unchecked Sendable {
     /// format, and restart recognition.
     private func handleConfigurationChange() {
         guard running else { return }
+        lock.lock()
         let pending = lastPartial.trimmingCharacters(in: .whitespacesAndNewlines)
+        lastPartial = ""
+        stabilizer.reset()
+        lock.unlock()
         if !pending.isEmpty {
-            onFinal?(lastPartial)
-            lastPartial = ""
+            onFinal?(pending)
         }
         engine.inputNode.removeTap(onBus: 0)
         installTap()
