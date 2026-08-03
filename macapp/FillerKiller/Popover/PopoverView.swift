@@ -70,6 +70,15 @@ struct PopoverView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
+            if let reportId = model.lastSavedReportId {
+                Button {
+                    model.openReport(reportId) { openWindow(id: "retro") }
+                } label: {
+                    Label("View Session Report", systemImage: "doc.text.magnifyingglass")
+                        .frame(maxWidth: .infinity)
+                }
+                .controlSize(.large)
+            }
             Text("On-device. Nothing leaves your Mac.")
                 .font(.caption)
                 .foregroundStyle(.secondary)

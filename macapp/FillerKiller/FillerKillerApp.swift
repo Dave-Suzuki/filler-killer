@@ -21,7 +21,7 @@ struct FillerKillerApp: App {
         .menuBarExtraStyle(.window)
 
         Window("Trends", id: "retro") {
-            RetroView(model: RetroModel(store: model.sessionStore))
+            RetroView(app: model)
         }
         .defaultSize(width: 780, height: 720)
 
@@ -105,6 +105,11 @@ final class AppModel: ObservableObject {
 
     @Published var granolaConnected = GranolaKeychain.load() != nil
     @Published var granolaStatus = ""
+
+    // Post-session report: the just-saved session's retro id ("l:<id>"),
+    // and a one-shot navigation request the Trends window consumes.
+    @Published var lastSavedReportId: String?
+    @Published var pendingRetroItemId: String?
 
     private let hud = HUDController()
     private var counter = LiveSessionCounter()
@@ -198,6 +203,7 @@ final class AppModel: ObservableObject {
         wordCount = 0
         rate = 0
         lastHits = []
+        lastSavedReportId = nil
         cleanRunWords = 0
         bestCleanRun = 0
         firedCleanThresholds = []
@@ -334,7 +340,9 @@ final class AppModel: ObservableObject {
                 per100Words: counter.per100Words
             )
             savedSessions = (try? store?.savedSessionCount()) ?? savedSessions
-            if id != nil {
+            if let id {
+                // Retro hides zero-word items, so only offer a report with words.
+                lastSavedReportId = counter.wordCount > 0 ? "l:\(id)" : nil
                 let lead = bestCleanRun > 0 ? "Best clean run: \(bestCleanRun) words. " : ""
                 status = lead + "Saved. \(fillerCount) fillers in \(wordCount) words — "
                     + String(format: "%.1f", rate) + " per 100."
@@ -344,10 +352,18 @@ final class AppModel: ObservableObject {
             }
         } else {
             try? recorder?.discard()
+            lastSavedReportId = nil
             status = "Discarded — like it never happened."
         }
         recorder = nil
         state = .idle
+    }
+
+    /// "View Report" after a saved session: ask the Trends window to open
+    /// drilled into that session's transcript.
+    func openReport(_ itemId: String, _ open: () -> Void) {
+        pendingRetroItemId = itemId
+        openTrends(open)
     }
 
     func previewHUD(terms: [String], count: Int, rate: Double) {

@@ -22,6 +22,7 @@ final class RetroModel: ObservableObject {
     @Published var delta: Double?
     @Published var totalFillers = 0
     @Published var loadError = ""
+    @Published var path: [String] = [] // drill-down navigation (item ids)
 
     private let store: SessionStore?
 
@@ -80,11 +81,19 @@ final class RetroModel: ObservableObject {
 }
 
 struct RetroView: View {
-    @ObservedObject var model: RetroModel
+    // StateObject: the scene body re-evaluates on every AppModel change, and
+    // an inline-constructed model would reset charts and navigation mid-use.
+    @StateObject private var model: RetroModel
+    @ObservedObject var app: AppModel
     @AppStorage("targetRate") private var targetRate = 3.0
 
+    init(app: AppModel) {
+        self.app = app
+        _model = StateObject(wrappedValue: RetroModel(store: app.sessionStore))
+    }
+
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $model.path) {
             Group {
                 if model.items.isEmpty, model.range == .all {
                     wholeWindowEmpty
@@ -115,9 +124,23 @@ struct RetroView: View {
             NSApp.setActivationPolicy(.regular)
             NSApp.activate(ignoringOtherApps: true)
             model.reload()
+            consumePendingReport()
+        }
+        .onChange(of: app.pendingRetroItemId) { _, _ in
+            consumePendingReport() // window already open when the ask arrives
         }
         .onDisappear {
             NSApp.setActivationPolicy(.accessory)
+        }
+    }
+
+    /// One-shot navigation request from "View Report" in the popover.
+    private func consumePendingReport() {
+        guard let pending = app.pendingRetroItemId else { return }
+        app.pendingRetroItemId = nil
+        model.reload()
+        if model.items.contains(where: { $0.id == pending }) {
+            model.path = [pending]
         }
     }
 
