@@ -56,22 +56,29 @@ can read, so filler-killer uses the **official Granola API**:
 On older Granola installs with a readable local cache (`cache-v3.json` /
 `cache-v6.json`), no key is needed — the cache is read directly.
 
-### Whose words get counted (`FK_MY_NAME`)
+### Whose words get counted (`FK_MY_NAME`, `FK_MY_EMAIL`)
 
 In a Granola transcript, **"Me" is whoever captured the note** — their
 microphone. For meetings someone *else* recorded and shared with you, your
 words appear under your display name instead, and counting "Me" would pin the
-note-taker's fillers on you. Set the names Granola labels you with:
+note-taker's fillers on you. Set the names Granola labels you with, and your
+Granola account email:
 
 ```bash
 export FK_MY_NAME="Dave Suzuki,Dave"
+export FK_MY_EMAIL="dave.suzuki@hiya.com"
 ```
 
-Per meeting, if a named speaker matches (full name or first name,
-case-insensitive), that speaker is counted; otherwise "Me" is (your own
-notes). The next `fk sync` also re-checks every already-synced meeting from
-its stored transcript, so history heals without refetching. Unset, behavior
-is unchanged: "Me" is always counted.
+Per meeting:
+- a named speaker matching you (full or first name, case-insensitive) is
+  counted;
+- otherwise "Me" is counted — **unless** the note's owner metadata says
+  someone else captured it, in which case the meeting isn't counted at all
+  (you weren't there, or never spoke; the transcript stays browsable).
+
+The next `fk sync` also re-checks every already-synced meeting from its
+stored transcript and owner metadata, so history heals without refetching.
+Unset, behavior is unchanged: "Me" is always counted.
 
 ## Use
 

@@ -6,7 +6,13 @@ import json
 from pathlib import Path
 
 from fillerkiller.detector import Utterance
-from fillerkiller.granola.source import Meeting, resolve_self_speaker
+from fillerkiller.granola.source import (
+    Meeting,
+    extract_owner,
+    owned_by_me,
+    resolve_self_speaker,
+    self_speaker_for,
+)
 from fillerkiller.store.db import connect
 from fillerkiller.sync import sync_meetings
 
@@ -116,6 +122,101 @@ def test_sync_reattributes_previously_synced_meetings(tmp_path):
     # Steady state: nothing left to heal.
     stats = sync_meetings(conn, _FakeSource([_shared_meeting()]), my_names=["Dave Suzuki"])
     assert stats["reattributed"] == 0
+
+
+def test_extract_owner_shapes():
+    assert extract_owner({"owner": {"email": "P@Hiya.com", "name": "Prateek Saxena"}}) == (
+        "p@hiya.com", "Prateek Saxena",
+    )
+    assert extract_owner({"creator": {"name": "Rhonda Simmons"}}) == (None, "Rhonda Simmons")
+    assert extract_owner({"created_by": "rhonda.simmons@hiya.com"}) == (
+        "rhonda.simmons@hiya.com", None,
+    )
+    assert extract_owner({"user": "Rhonda Simmons"}) == (None, "Rhonda Simmons")
+    assert extract_owner({"title": "no owner here"}) == (None, None)
+    assert extract_owner({"owner": {}}) == (None, None)
+
+
+def test_owned_by_me_decisions():
+    # Email is authoritative when both sides have one.
+    assert owned_by_me("dave@hiya.com", None, "Dave@Hiya.com", []) is True
+    assert owned_by_me("prateek@hiya.com", None, "dave@hiya.com", []) is False
+    # Name fallback uses the same matching as speakers.
+    assert owned_by_me(None, "Dave", None, ["Dave Suzuki"]) is True
+    assert owned_by_me(None, "Rhonda Simmons", None, ["Dave Suzuki"]) is False
+    # No usable signal -> unknown.
+    assert owned_by_me(None, None, "dave@hiya.com", ["Dave"]) is None
+    assert owned_by_me("prateek@hiya.com", None, None, []) is None
+
+
+def test_self_speaker_for_skips_foreign_notes_without_my_voice():
+    utts = U([("Me", "like like basically"), ("Rhonda Simmons", "hola")])
+    # Someone else's note, I never speak -> not counted at all.
+    assert self_speaker_for(utts, ["Dave Suzuki"], "dave@hiya.com",
+                            "rhonda.simmons@hiya.com", "Rhonda Simmons") == ""
+    # Someone else's note but I'm a named speaker -> counted as me.
+    utts_with_me = utts + U([("Dave Suzuki", "sounds good")])
+    assert self_speaker_for(utts_with_me, ["Dave Suzuki"], "dave@hiya.com",
+                            "rhonda.simmons@hiya.com", "Rhonda Simmons") == "Dave Suzuki"
+    # My own note -> "Me" counted as always.
+    assert self_speaker_for(utts, ["Dave Suzuki"], "dave@hiya.com",
+                            "dave@hiya.com", "Dave") == "Me"
+    # Owner unknown -> unchanged legacy behavior.
+    assert self_speaker_for(utts, ["Dave Suzuki"], "dave@hiya.com", None, None) == "Me"
+
+
+def _foreign_meeting(updated="v1", owner_email="rhonda.simmons@hiya.com"):
+    """A note Rhonda captured for a meeting Dave didn't attend."""
+    return Meeting(
+        id="foreign-1",
+        title="Revision de datos",
+        started_at="2026-08-01T10:00:00Z",
+        updated_at=updated,
+        utterances=U([
+            ("Me", "so so basically you know"),
+            ("Them", "right right"),
+        ]),
+        owner_email=owner_email,
+        owner_name="Rhonda Simmons",
+    )
+
+
+def test_sync_skips_foreign_meeting_entirely(tmp_path):
+    conn = connect(tmp_path / "fk.db")
+    sync_meetings(conn, _FakeSource([_foreign_meeting()]),
+                  my_names=["Dave Suzuki"], my_email="dave.suzuki@hiya.com")
+    row = conn.execute("SELECT * FROM meetings WHERE id = 'foreign-1'").fetchone()
+    assert row["self_speaker"] == ""
+    assert row["word_count"] == 0
+    assert row["filler_count"] == 0
+    assert row["owner_email"] == "rhonda.simmons@hiya.com"
+    assert conn.execute("SELECT COUNT(*) c FROM filler_hits").fetchone()["c"] == 0
+    # Transcript still browsable.
+    n = conn.execute("SELECT COUNT(*) c FROM utterances WHERE meeting_id='foreign-1'").fetchone()
+    assert n["c"] == 2
+
+
+def test_sync_backfills_owner_and_heals_old_rows(tmp_path):
+    conn = connect(tmp_path / "fk.db")
+    # Synced before owner metadata existed: counted as Me (the bug).
+    no_owner = _foreign_meeting(owner_email=None)
+    no_owner.owner_name = None
+    sync_meetings(conn, _FakeSource([no_owner]), my_names=["Dave Suzuki"],
+                  my_email="dave.suzuki@hiya.com")
+    row = conn.execute("SELECT * FROM meetings WHERE id = 'foreign-1'").fetchone()
+    assert row["self_speaker"] == "Me"
+    assert row["filler_count"] > 0
+
+    # Later sync: note unchanged (stub path) but now carries owner metadata —
+    # backfilled, then healed to not-counted.
+    stats = sync_meetings(conn, _FakeSource([_foreign_meeting()]),
+                          my_names=["Dave Suzuki"], my_email="dave.suzuki@hiya.com")
+    assert stats["skipped"] == 1
+    assert stats["reattributed"] == 1
+    row = conn.execute("SELECT * FROM meetings WHERE id = 'foreign-1'").fetchone()
+    assert row["self_speaker"] == ""
+    assert row["word_count"] == 0
+    assert row["owner_email"] == "rhonda.simmons@hiya.com"
 
 
 def test_migration_adds_self_speaker_column(tmp_path):

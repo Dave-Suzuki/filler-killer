@@ -47,6 +47,13 @@ public final class SessionStore {
                 )
             }
         }
+        migrator.registerMigration("v3-meeting-owner") { db in
+            let cols = try Row.fetchAll(db, sql: "PRAGMA table_info(meetings)")
+                .map { $0["name"] as String }
+            for col in ["owner_email", "owner_name"] where !cols.contains(col) {
+                try db.execute(sql: "ALTER TABLE meetings ADD COLUMN \(col) TEXT")
+            }
+        }
         try migrator.migrate(pool)
     }
 
@@ -60,7 +67,9 @@ public final class SessionStore {
         filler_count INTEGER NOT NULL,
         per_100_words REAL NOT NULL,
         synced_at TEXT NOT NULL,
-        self_speaker TEXT NOT NULL DEFAULT 'Me'
+        self_speaker TEXT NOT NULL DEFAULT 'Me',
+        owner_email TEXT,
+        owner_name TEXT
     );
     CREATE TABLE IF NOT EXISTS utterances (
         meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,

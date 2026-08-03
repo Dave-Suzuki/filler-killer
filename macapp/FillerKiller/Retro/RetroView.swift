@@ -202,10 +202,13 @@ struct RetroView: View {
                     RuleMark(y: .value("Target", targetRate))
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
                         .foregroundStyle(.secondary)
-                        .annotation(position: .trailing, alignment: .leading) {
+                        // position .top keeps the label INSIDE the plot area;
+                        // .trailing rendered outside it and got clipped.
+                        .annotation(position: .top, alignment: .trailing) {
                             Text(String(format: "goal %.1f", targetRate))
                                 .font(.system(size: 11))
                                 .foregroundStyle(.secondary)
+                                .padding(.trailing, 4)
                         }
                 }
                 .chartYScale(domain: 0 ... max(maxRate, targetRate) * 1.15)

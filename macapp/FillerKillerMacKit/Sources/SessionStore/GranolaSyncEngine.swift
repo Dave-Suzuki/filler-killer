@@ -40,11 +40,16 @@ public final class GranolaSyncEngine {
     private let store: SessionStore
     private let client: any GranolaAPI
     private let myNames: [String]
+    private let myEmail: String?
 
-    public init(store: SessionStore, client: any GranolaAPI, myNames: [String] = []) {
+    public init(
+        store: SessionStore, client: any GranolaAPI,
+        myNames: [String] = [], myEmail: String? = nil
+    ) {
         self.store = store
         self.client = client
         self.myNames = myNames
+        self.myEmail = myEmail
     }
 
     public func sync() async throws -> GranolaSyncStats {
@@ -59,6 +64,20 @@ public final class GranolaSyncEngine {
         var stats = GranolaSyncStats()
         for stub in try await client.listNotes() {
             if let existing = known[stub.id], existing == stub.updatedAt {
+                // Unchanged content — but backfill owner metadata (columns
+                // added after the meeting was first synced), so the
+                // re-attribution pass below can heal it.
+                if stub.ownerEmail != nil || stub.ownerName != nil {
+                    try store.pool.write { db in
+                        try db.execute(
+                            sql: """
+                            UPDATE meetings SET owner_email = COALESCE(owner_email, ?),
+                                owner_name = COALESCE(owner_name, ?) WHERE id = ?
+                            """,
+                            arguments: [stub.ownerEmail, stub.ownerName, stub.id]
+                        )
+                    }
+                }
                 stats.skipped += 1
                 continue
             }
@@ -82,7 +101,12 @@ public final class GranolaSyncEngine {
     private func storeMeeting(
         stub: GranolaNoteStub, detail: GranolaNoteDetail, utterances: [Utterance]
     ) throws {
-        let speaker = resolveSelfSpeaker(utterances, myNames: myNames)
+        let ownerEmail = detail.ownerEmail ?? stub.ownerEmail
+        let ownerName = detail.ownerName ?? stub.ownerName
+        let speaker = selfSpeakerFor(
+            utterances, myNames: myNames, myEmail: myEmail,
+            ownerEmail: ownerEmail, ownerName: ownerName
+        )
         let result = analyzeUtterances(utterances, speaker: speaker, includeVocalized: false)
         let formatter = ISO8601DateFormatter()
         let now = formatter.string(from: Date())
@@ -91,8 +115,9 @@ public final class GranolaSyncEngine {
             try db.execute(
                 sql: """
                 INSERT INTO meetings (id, title, started_at, updated_at, word_count,
-                    filler_count, per_100_words, synced_at, self_speaker)
-                VALUES (?,?,?,?,?,?,?,?,?)
+                    filler_count, per_100_words, synced_at, self_speaker,
+                    owner_email, owner_name)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 arguments: [
                     stub.id,
@@ -104,6 +129,8 @@ public final class GranolaSyncEngine {
                     result.per100Words,
                     now,
                     speaker,
+                    ownerEmail,
+                    ownerName,
                 ]
             )
             for (idx, utterance) in utterances.enumerated() {
@@ -121,9 +148,12 @@ public final class GranolaSyncEngine {
     /// refetching a single transcript. Returns how many meetings changed.
     private func reattributeStored() throws -> Int {
         let myNames = self.myNames
+        let myEmail = self.myEmail
         return try store.pool.write { db -> Int in
             var healed = 0
-            let meetings = try Row.fetchAll(db, sql: "SELECT id, self_speaker FROM meetings")
+            let meetings = try Row.fetchAll(
+                db, sql: "SELECT id, self_speaker, owner_email, owner_name FROM meetings"
+            )
             for row in meetings {
                 let meetingId: String = row["id"]
                 let stored: String = row["self_speaker"]
@@ -133,7 +163,10 @@ public final class GranolaSyncEngine {
                     arguments: [meetingId]
                 ).map { Utterance(speaker: $0["speaker"], text: $0["text"]) }
                 guard !utterances.isEmpty else { continue }
-                let speaker = resolveSelfSpeaker(utterances, myNames: myNames)
+                let speaker = selfSpeakerFor(
+                    utterances, myNames: myNames, myEmail: myEmail,
+                    ownerEmail: row["owner_email"], ownerName: row["owner_name"]
+                )
                 guard speaker != stored else { continue }
                 let result = analyzeUtterances(
                     utterances, speaker: speaker, includeVocalized: false

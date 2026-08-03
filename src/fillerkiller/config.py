@@ -30,6 +30,13 @@ def my_names() -> list[str]:
     return [part.strip() for part in raw.split(",") if part.strip()]
 
 
+def my_email() -> str | None:
+    """FK_MY_EMAIL: the user's Granola account email; combined with note
+    owner metadata to skip shared meetings the user didn't speak in."""
+    raw = os.environ.get("FK_MY_EMAIL", "").strip()
+    return raw or None
+
+
 def granola_api_key() -> str | None:
     return os.environ.get("GRANOLA_API_KEY")
 

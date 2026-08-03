@@ -137,6 +137,125 @@ final class GranolaSyncEngineTests: XCTestCase {
                                                 reattributed: 0))
     }
 
+    func testForeignNoteWithoutMyVoiceIsNotCounted() async throws {
+        let store = try tempStore()
+        // Rhonda's note for a meeting Dave didn't attend: her mic is "Me",
+        // Dave never appears.
+        let transcript = try segments("""
+        [{"text": "so so basically you know",
+          "speaker": {"source": "microphone", "attribution": "me"}},
+         {"text": "right right", "speaker": {"source": "system"}}]
+        """)
+        let owner = GranolaOwner(email: "rhonda.simmons@hiya.com", name: "Rhonda Simmons")
+        let api = StubAPI(
+            stubs: [GranolaNoteStub(id: "f1", title: "Revision de datos",
+                                    createdAt: "2026-08-01T10:00:00Z", updatedAt: "v1",
+                                    owner: owner)],
+            details: ["f1": GranolaNoteDetail(id: "f1", title: "Revision de datos",
+                                              createdAt: nil, updatedAt: "v1",
+                                              transcript: transcript, owner: owner)]
+        )
+        _ = try await GranolaSyncEngine(
+            store: store, client: api,
+            myNames: ["Dave Suzuki"], myEmail: "dave.suzuki@hiya.com"
+        ).sync()
+        try await store.pool.read { db in
+            let speaker = try String.fetchOne(
+                db, sql: "SELECT self_speaker FROM meetings WHERE id = 'f1'"
+            )
+            XCTAssertEqual(speaker, "")
+            let words = try Int.fetchOne(
+                db, sql: "SELECT word_count FROM meetings WHERE id = 'f1'"
+            )
+            XCTAssertEqual(words, 0)
+            let hits = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM filler_hits")
+            XCTAssertEqual(hits, 0)
+            let utterances = try Int.fetchOne(
+                db, sql: "SELECT COUNT(*) FROM utterances WHERE meeting_id = 'f1'"
+            )
+            XCTAssertEqual(utterances, 2, "transcript stays browsable")
+        }
+    }
+
+    func testOwnerBackfillHealsRowsSyncedBeforeOwnerColumns() async throws {
+        let store = try tempStore()
+        let transcript = try segments("""
+        [{"text": "so so basically you know",
+          "speaker": {"source": "microphone", "attribution": "me"}}]
+        """)
+        // First sync: API gave no owner metadata — counted as Me (the bug).
+        let anonymous = StubAPI(
+            stubs: [GranolaNoteStub(id: "f1", title: "Foreign", createdAt: nil,
+                                    updatedAt: "v1")],
+            details: ["f1": GranolaNoteDetail(id: "f1", title: "Foreign", createdAt: nil,
+                                              updatedAt: "v1", transcript: transcript)]
+        )
+        _ = try await GranolaSyncEngine(
+            store: store, client: anonymous,
+            myNames: ["Dave Suzuki"], myEmail: "dave.suzuki@hiya.com"
+        ).sync()
+        try await store.pool.read { db in
+            let fillers = try Int.fetchOne(
+                db, sql: "SELECT filler_count FROM meetings WHERE id = 'f1'"
+            )
+            XCTAssertGreaterThan(fillers ?? 0, 0)
+        }
+
+        // Later sync: unchanged note, but the list now carries the owner —
+        // backfilled on the skip path, then healed to not-counted.
+        let withOwner = StubAPI(
+            stubs: [GranolaNoteStub(id: "f1", title: "Foreign", createdAt: nil,
+                                    updatedAt: "v1",
+                                    owner: GranolaOwner(email: "rhonda.simmons@hiya.com",
+                                                        name: nil))],
+            details: [:]
+        )
+        let stats = try await GranolaSyncEngine(
+            store: store, client: withOwner,
+            myNames: ["Dave Suzuki"], myEmail: "dave.suzuki@hiya.com"
+        ).sync()
+        XCTAssertEqual(stats, GranolaSyncStats(added: 0, updated: 0, skipped: 1,
+                                               reattributed: 1))
+        try await store.pool.read { db in
+            let speaker = try String.fetchOne(
+                db, sql: "SELECT self_speaker FROM meetings WHERE id = 'f1'"
+            )
+            XCTAssertEqual(speaker, "")
+            let words = try Int.fetchOne(
+                db, sql: "SELECT word_count FROM meetings WHERE id = 'f1'"
+            )
+            XCTAssertEqual(words, 0)
+        }
+    }
+
+    func testOwnerDecodingShapes() throws {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let objectShape = try decoder.decode(GranolaNoteStub.self, from: Data("""
+        {"id": "n1", "owner": {"email": "P@Hiya.com", "name": "Prateek Saxena"}}
+        """.utf8))
+        XCTAssertEqual(objectShape.ownerEmail, "p@hiya.com")
+        XCTAssertEqual(objectShape.ownerName, "Prateek Saxena")
+
+        let stringShape = try decoder.decode(GranolaNoteStub.self, from: Data("""
+        {"id": "n2", "created_by": "rhonda.simmons@hiya.com"}
+        """.utf8))
+        XCTAssertEqual(stringShape.ownerEmail, "rhonda.simmons@hiya.com")
+        XCTAssertNil(stringShape.ownerName)
+
+        let noOwner = try decoder.decode(GranolaNoteStub.self, from: Data("""
+        {"id": "n3", "title": "plain"}
+        """.utf8))
+        XCTAssertNil(noOwner.ownerEmail)
+        XCTAssertNil(noOwner.ownerName)
+
+        let weirdShape = try decoder.decode(GranolaNoteStub.self, from: Data("""
+        {"id": "n4", "owner": 42}
+        """.utf8))
+        XCTAssertNil(weirdShape.ownerEmail)
+        XCTAssertNil(weirdShape.ownerName)
+    }
+
     func testChangedNoteReanalyzedWithoutDuplicates() async throws {
         let store = try tempStore()
         let transcript = try segments("""

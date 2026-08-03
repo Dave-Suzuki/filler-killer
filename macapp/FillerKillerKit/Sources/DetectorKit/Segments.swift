@@ -124,6 +124,43 @@ public func resolveSelfSpeaker(_ utterances: [Utterance], myNames: [String]) -> 
     return matched.max { (words[$0]!, $0) < (words[$1]!, $1) } ?? "Me"
 }
 
+/// Did the user capture this note? true/false when the note's owner metadata
+/// plus the user's configured identity decide it; nil when unknowable.
+/// Port of owned_by_me in granola/source.py.
+public func ownedByMe(
+    ownerEmail: String?, ownerName: String?, myEmail: String?, myNames: [String]
+) -> Bool? {
+    let ownEmail = ownerEmail?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
+    let mineEmail = myEmail?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
+    if !ownEmail.isEmpty, !mineEmail.isEmpty {
+        return ownEmail == mineEmail
+    }
+    if let ownerName, !normName(ownerName).isEmpty {
+        let aliases = myNames.map(normName).filter { !$0.isEmpty }
+        if !aliases.isEmpty {
+            return aliases.contains { nameMatch(normName(ownerName), $0) }
+        }
+    }
+    return nil
+}
+
+/// Which speaker to count, or "" for none — port of self_speaker_for in
+/// granola/source.py. "" happens when the note is known to be someone ELSE's
+/// and no named speaker matches the user: they weren't in the meeting (or
+/// never spoke), so counting "Me" would pin the note-taker's fillers on them.
+public func selfSpeakerFor(
+    _ utterances: [Utterance], myNames: [String], myEmail: String?,
+    ownerEmail: String?, ownerName: String?
+) -> String {
+    let speaker = resolveSelfSpeaker(utterances, myNames: myNames)
+    if speaker == "Me",
+       ownedByMe(ownerEmail: ownerEmail, ownerName: ownerName,
+                 myEmail: myEmail, myNames: myNames) == false {
+        return ""
+    }
+    return speaker
+}
+
 /// Merge consecutive same-speaker segments so phrases and stutter-repeats
 /// that span a segment boundary are still detectable.
 public func mergeSegments(_ segments: [MaybeSegment]) -> [Utterance] {

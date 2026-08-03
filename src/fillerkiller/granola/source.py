@@ -19,6 +19,8 @@ class Meeting:
     started_at: str  # ISO 8601
     updated_at: str | None = None
     utterances: list[Utterance] = field(default_factory=list)
+    owner_email: str | None = None  # who captured the note, when the API says
+    owner_name: str | None = None
 
 
 class GranolaSource(Protocol):
@@ -78,6 +80,57 @@ def resolve_self_speaker(utterances: list[Utterance], my_names: list[str]) -> st
     # Several labels can match (e.g. "Dave" and "Dave Suzuki"): the one who
     # spoke the most words wins; name breaks exact ties deterministically.
     return max(matched, key=lambda s: (words[s], s))
+
+
+def extract_owner(note: dict) -> tuple[str | None, str | None]:
+    """Best-effort (email, name) of whoever captured the note, from an API
+    payload. The public API exposes the note owner; the key has varied across
+    docs, so check the plausible spellings and both shapes (object/string)."""
+    for key in ("owner", "creator", "created_by", "user", "author"):
+        value = note.get(key)
+        if isinstance(value, dict):
+            email = value.get("email")
+            name = value.get("name") or value.get("full_name") or value.get("display_name")
+            if email or name:
+                return (
+                    str(email).strip().lower() if email else None,
+                    str(name).strip() if name else None,
+                )
+        elif isinstance(value, str) and value.strip():
+            raw = value.strip()
+            if "@" in raw:
+                return raw.lower(), None
+            return None, raw
+    return None, None
+
+
+def owned_by_me(
+    owner_email: str | None, owner_name: str | None,
+    my_email: str | None, my_names: list[str],
+) -> bool | None:
+    """Did the user capture this note? True/False when the owner metadata
+    plus the user's configured identity decide it; None when unknowable."""
+    if owner_email and my_email:
+        return owner_email.strip().lower() == my_email.strip().lower()
+    if owner_name:
+        aliases = [a for a in (_norm(n) for n in my_names) if a]
+        if aliases:
+            return any(_name_match(_norm(owner_name), a) for a in aliases)
+    return None
+
+
+def self_speaker_for(
+    utterances: list[Utterance], my_names: list[str], my_email: str | None,
+    owner_email: str | None, owner_name: str | None,
+) -> str:
+    """Which speaker to count, or "" for none. "" happens when the note is
+    known to be someone ELSE's and no named speaker matches the user — they
+    weren't in the meeting (or never spoke), so counting "Me" would pin the
+    note-taker's fillers on them."""
+    speaker = resolve_self_speaker(utterances, my_names)
+    if speaker == "Me" and owned_by_me(owner_email, owner_name, my_email, my_names) is False:
+        return ""
+    return speaker
 
 
 def merge_segments(segments: list) -> list[Utterance]:

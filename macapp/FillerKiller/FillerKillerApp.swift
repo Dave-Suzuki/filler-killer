@@ -87,12 +87,20 @@ final class AppModel: ObservableObject {
     // Names Granola may label the user with in meetings captured by someone
     // else (comma-separated). Empty falls back to the macOS account name.
     @AppStorage("granolaMyNames") var granolaMyNames = ""
+    // Granola account email: matched against note owner metadata so meetings
+    // captured by someone else where the user never speaks aren't counted.
+    @AppStorage("granolaMyEmail") var granolaMyEmail = ""
 
     var granolaSelfNames: [String] {
         let configured = granolaMyNames.split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
         return configured.isEmpty ? [NSFullUserName()] : configured
+    }
+
+    var granolaSelfEmail: String? {
+        let trimmed = granolaMyEmail.trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     @Published var granolaConnected = GranolaKeychain.load() != nil
@@ -416,7 +424,8 @@ final class AppModel: ObservableObject {
         syncing = true
         granolaStatus = "Syncing…"
         let engine = GranolaSyncEngine(
-            store: store, client: GranolaClient(apiKey: key), myNames: granolaSelfNames
+            store: store, client: GranolaClient(apiKey: key),
+            myNames: granolaSelfNames, myEmail: granolaSelfEmail
         )
         Task {
             do {

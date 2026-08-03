@@ -14,11 +14,87 @@ public struct GranolaError: LocalizedError {
     public var errorDescription: String? { message }
 }
 
+/// Tolerant owner payload: an object ({email, name/full_name/display_name})
+/// or a bare string (email or name). Never fails decoding the parent note —
+/// the exact key/shape has varied across API docs, so parse defensively.
+public struct GranolaOwner: Decodable, Sendable {
+    public let email: String?
+    public let name: String?
+
+    public init(email: String?, name: String?) {
+        self.email = email
+        self.name = name
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case email, name, fullName, displayName
+    }
+
+    public init(from decoder: Decoder) throws {
+        if let container = try? decoder.container(keyedBy: CodingKeys.self) {
+            func field(_ key: CodingKeys) -> String? {
+                (try? container.decodeIfPresent(String.self, forKey: key)) ?? nil
+            }
+            email = field(.email)
+            name = field(.name) ?? field(.fullName) ?? field(.displayName)
+        } else if let raw = try? decoder.singleValueContainer().decode(String.self),
+                  !raw.trimmingCharacters(in: .whitespaces).isEmpty {
+            let trimmed = raw.trimmingCharacters(in: .whitespaces)
+            email = trimmed.contains("@") ? trimmed : nil
+            name = trimmed.contains("@") ? nil : trimmed
+        } else {
+            email = nil
+            name = nil
+        }
+    }
+}
+
+/// Owner lookup shared by note stubs and details: first candidate key with
+/// content wins (mirrors extract_owner in granola/source.py).
+func resolveOwner(_ candidates: [GranolaOwner?]) -> (email: String?, name: String?) {
+    var email: String?
+    var name: String?
+    for candidate in candidates {
+        if email == nil, let e = candidate?.email,
+           !e.trimmingCharacters(in: .whitespaces).isEmpty {
+            email = e.trimmingCharacters(in: .whitespaces).lowercased()
+        }
+        if name == nil, let n = candidate?.name,
+           !n.trimmingCharacters(in: .whitespaces).isEmpty {
+            name = n.trimmingCharacters(in: .whitespaces)
+        }
+    }
+    return (email, name)
+}
+
 public struct GranolaNoteStub: Decodable, Sendable {
     public let id: String
     public let title: String?
     public let createdAt: String?
     public let updatedAt: String?
+    public let owner: GranolaOwner?
+    public let creator: GranolaOwner?
+    public let createdBy: GranolaOwner?
+    public let user: GranolaOwner?
+    public let author: GranolaOwner?
+
+    public init(
+        id: String, title: String?, createdAt: String?, updatedAt: String?,
+        owner: GranolaOwner? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.owner = owner
+        creator = nil
+        createdBy = nil
+        user = nil
+        author = nil
+    }
+
+    public var ownerEmail: String? { resolveOwner([owner, creator, createdBy, user, author]).email }
+    public var ownerName: String? { resolveOwner([owner, creator, createdBy, user, author]).name }
 }
 
 struct GranolaNotesPage: Decodable {
@@ -33,6 +109,30 @@ public struct GranolaNoteDetail: Decodable, Sendable {
     public let createdAt: String?
     public let updatedAt: String?
     public let transcript: [MaybeSegment]?
+    public let owner: GranolaOwner?
+    public let creator: GranolaOwner?
+    public let createdBy: GranolaOwner?
+    public let user: GranolaOwner?
+    public let author: GranolaOwner?
+
+    public init(
+        id: String?, title: String?, createdAt: String?, updatedAt: String?,
+        transcript: [MaybeSegment]?, owner: GranolaOwner? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.transcript = transcript
+        self.owner = owner
+        creator = nil
+        createdBy = nil
+        user = nil
+        author = nil
+    }
+
+    public var ownerEmail: String? { resolveOwner([owner, creator, createdBy, user, author]).email }
+    public var ownerName: String? { resolveOwner([owner, creator, createdBy, user, author]).name }
 }
 
 public struct GranolaClient: Sendable {

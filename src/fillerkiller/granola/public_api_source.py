@@ -22,7 +22,7 @@ import urllib.parse
 import urllib.request
 
 from fillerkiller import config
-from fillerkiller.granola.source import Meeting, merge_segments
+from fillerkiller.granola.source import Meeting, extract_owner, merge_segments
 
 _MAX_PAGES = 20
 
@@ -108,12 +108,15 @@ class PublicApiSource:
             if not note_id:
                 continue
             updated = note.get("updated_at")
+            owner_email, owner_name = extract_owner(note)
             if note_id in self._known and self._known[note_id] == updated:
                 # Unchanged since last sync: no transcript fetch needed. Yield a
-                # stub so sync's skip-accounting still sees it.
+                # stub so sync's skip-accounting still sees it (and can backfill
+                # owner metadata on rows synced before those columns existed).
                 out.append(Meeting(id=str(note_id), title=note.get("title") or "(untitled)",
                                    started_at=note.get("created_at") or "",
-                                   updated_at=updated, utterances=[]))
+                                   updated_at=updated, utterances=[],
+                                   owner_email=owner_email, owner_name=owner_name))
                 continue
             detail = self._get(f"notes/{note_id}", {"include": "transcript"})
             fetched += 1
@@ -125,6 +128,7 @@ class PublicApiSource:
             utts = merge_segments(segments)
             if not utts:
                 continue
+            detail_email, detail_name = extract_owner(detail)
             out.append(
                 Meeting(
                     id=str(note_id),
@@ -132,6 +136,8 @@ class PublicApiSource:
                     started_at=detail.get("created_at") or note.get("created_at") or "",
                     updated_at=updated,
                     utterances=utts,
+                    owner_email=detail_email or owner_email,
+                    owner_name=detail_name or owner_name,
                 )
             )
         out.sort(key=lambda m: m.started_at, reverse=True)

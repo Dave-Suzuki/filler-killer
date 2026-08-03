@@ -17,7 +17,9 @@ CREATE TABLE IF NOT EXISTS meetings (
     filler_count INTEGER NOT NULL,
     per_100_words REAL NOT NULL,
     synced_at TEXT NOT NULL,
-    self_speaker TEXT NOT NULL DEFAULT 'Me'  -- which utterance speaker was counted
+    self_speaker TEXT NOT NULL DEFAULT 'Me',  -- counted speaker; '' = not counted
+    owner_email TEXT,                         -- who captured the note (API metadata)
+    owner_name TEXT
 );
 CREATE TABLE IF NOT EXISTS utterances (
     meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
@@ -72,6 +74,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
     meeting_cols = {row[1] for row in conn.execute("PRAGMA table_info(meetings)")}
     if "self_speaker" not in meeting_cols:
         conn.execute("ALTER TABLE meetings ADD COLUMN self_speaker TEXT NOT NULL DEFAULT 'Me'")
+    for col in ("owner_email", "owner_name"):
+        if col not in meeting_cols:
+            conn.execute(f"ALTER TABLE meetings ADD COLUMN {col} TEXT")
 
 
 def connect(path: Path | None = None) -> sqlite3.Connection:

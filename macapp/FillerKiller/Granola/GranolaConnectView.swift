@@ -17,15 +17,19 @@ struct GranolaConnectView: View {
                 Text("Meetings sync in the background on launch and every 6 hours.")
                     .font(.callout).foregroundStyle(.secondary)
                 Divider()
-                Text("Your name in transcripts").font(.subheadline.weight(.semibold))
+                Text("Who you are in transcripts").font(.subheadline.weight(.semibold))
                 Text("When someone else captures the note, Granola labels their mic "
                     + "“Me” and you by name. List the names you appear as (comma-"
-                    + "separated) so only YOUR words are counted; next sync re-checks "
-                    + "past meetings. Empty uses your macOS account name.")
+                    + "separated) so only YOUR words are counted — and add your "
+                    + "Granola email so meetings you didn't speak in are skipped "
+                    + "entirely. The next sync re-checks past meetings. Empty name "
+                    + "uses your macOS account name.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 TextField(NSFullUserName(), text: $model.granolaMyNames)
+                    .textFieldStyle(.roundedBorder)
+                TextField("you@company.com", text: $model.granolaMyEmail)
                     .textFieldStyle(.roundedBorder)
                 HStack {
                     Button("Sync Now") { model.syncGranolaNow() }

@@ -57,6 +57,8 @@ public func dailyAverage(_ rows: [RateRow]) -> [DailyPoint] {
 }
 
 public enum RetroRange: String, CaseIterable, Sendable {
+    case day = "Day"
+    case threeDays = "3 Days"
     case week = "Week"
     case month = "Month"
     case threeMonths = "3 Months"
@@ -64,6 +66,8 @@ public enum RetroRange: String, CaseIterable, Sendable {
 
     public var days: Int? {
         switch self {
+        case .day: return 1
+        case .threeDays: return 3
         case .week: return 7
         case .month: return 30
         case .threeMonths: return 90
