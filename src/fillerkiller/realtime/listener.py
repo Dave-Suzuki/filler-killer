@@ -14,7 +14,7 @@ partial is committed as final so words aren't dropped.
 
 Newer macOS builds add a third case: on-device recognition can amend the
 partial forever without EVER finalizing or erroring, so a timer commits any
-partial that has stopped changing for ~1.75s (see stabilizer.py) and
+partial that has stopped changing for ~1.2s (see stabilizer.py) and
 restarts the request.
 """
 
@@ -174,7 +174,7 @@ class SpeechTranscriber:
             )
         # Keep a reference or PyObjC GC silently kills the timer block.
         self._timer = NSTimer.scheduledTimerWithTimeInterval_repeats_block_(
-            0.4, True, lambda _timer: self._commit_stable()
+            0.25, True, lambda _timer: self._commit_stable()
         )
 
     def stop(self) -> None:

@@ -15,7 +15,9 @@ public struct PartialStabilizer: Sendable {
     private var text = ""
     private var changedAt: Date?
 
-    public init(commitAfter: TimeInterval = 1.75) {
+    // 1.2s: long enough that partials still amending mid-sentence don't get
+    // split, short enough that the HUD reacts ~1.5s after a phrase ends.
+    public init(commitAfter: TimeInterval = 1.2) {
         self.commitAfter = commitAfter
     }
 

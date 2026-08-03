@@ -5,7 +5,7 @@
 //     commit the last partial as final, restart
 //   - STABILITY COMMIT: newer macOS on-device recognition can amend a partial
 //     forever without EVER delivering isFinal or a silence error; a partial
-//     unchanged for ~1.75s is committed as final and recognition restarts
+//     unchanged for ~1.2s is committed as final and recognition restarts
 //   - the AVAudioEngine tap NEVER stops between restarts; the only loss
 //     window is the lock-guarded request swap
 // New beyond the prototype: restart backoff after consecutive empty restarts,
@@ -69,7 +69,7 @@ public final class SpeechTranscriber: @unchecked Sendable {
     private static let contextualStrings = [
         "um", "uh", "you know", "kind of", "sort of", "i mean", "basically",
     ]
-    private static let stabilityTick: TimeInterval = 0.4
+    private static let stabilityTick: TimeInterval = 0.25
 
     private let recognizer: SFSpeechRecognizer
     private let engine = AVAudioEngine()

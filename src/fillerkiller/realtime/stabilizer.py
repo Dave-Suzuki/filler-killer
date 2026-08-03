@@ -13,7 +13,9 @@ macapp/FillerKillerKit/Sources/SpeechEngine/PartialStabilizer.swift.
 
 
 class PartialStabilizer:
-    def __init__(self, commit_after: float = 1.75):
+    # 1.2s: long enough that partials still amending mid-sentence don't get
+    # split, short enough that feedback lands ~1.5s after a phrase ends.
+    def __init__(self, commit_after: float = 1.2):
         self.commit_after = commit_after
         self._text = ""
         self._changed_at: float | None = None
