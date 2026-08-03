@@ -38,6 +38,15 @@ public final class SessionStore {
                 )
             }
         }
+        migrator.registerMigration("v2-meeting-self-speaker") { db in
+            let cols = try Row.fetchAll(db, sql: "PRAGMA table_info(meetings)")
+                .map { $0["name"] as String }
+            if !cols.contains("self_speaker") {
+                try db.execute(
+                    sql: "ALTER TABLE meetings ADD COLUMN self_speaker TEXT NOT NULL DEFAULT 'Me'"
+                )
+            }
+        }
         try migrator.migrate(pool)
     }
 
@@ -50,7 +59,8 @@ public final class SessionStore {
         word_count INTEGER NOT NULL,
         filler_count INTEGER NOT NULL,
         per_100_words REAL NOT NULL,
-        synced_at TEXT NOT NULL
+        synced_at TEXT NOT NULL,
+        self_speaker TEXT NOT NULL DEFAULT 'Me'
     );
     CREATE TABLE IF NOT EXISTS utterances (
         meeting_id TEXT NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,

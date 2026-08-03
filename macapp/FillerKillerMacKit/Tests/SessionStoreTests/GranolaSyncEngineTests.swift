@@ -76,6 +76,67 @@ final class GranolaSyncEngineTests: XCTestCase {
         }
     }
 
+    func testSharedNoteCountsNamedSelfSpeakerNotNoteTaker() async throws {
+        let store = try tempStore()
+        // Someone else captured this note: their mic is "Me", Dave is named.
+        let transcript = try segments("""
+        [{"text": "Yeah. Like, I think, like, basically it went well. Right?",
+          "speaker": {"source": "microphone", "attribution": "me"}},
+         {"text": "Sounds good. That is all I wanted to see.",
+          "speaker": {"source": "system", "name": "Dave Suzuki"}}]
+        """)
+        let api = StubAPI(
+            stubs: [GranolaNoteStub(id: "s1", title: "Shared", createdAt: "2026-08-03T19:30:00Z",
+                                    updatedAt: "v1")],
+            details: ["s1": GranolaNoteDetail(id: "s1", title: "Shared", createdAt: nil,
+                                              updatedAt: "v1", transcript: transcript)]
+        )
+
+        // Synced before any name was configured: note-taker's mic counted.
+        _ = try await GranolaSyncEngine(store: store, client: api).sync()
+        try await store.pool.read { db in
+            let speaker = try String.fetchOne(
+                db, sql: "SELECT self_speaker FROM meetings WHERE id = 's1'"
+            )
+            XCTAssertEqual(speaker, "Me")
+            let fillers = try Int.fetchOne(
+                db, sql: "SELECT filler_count FROM meetings WHERE id = 's1'"
+            )
+            XCTAssertGreaterThan(fillers ?? 0, 0)
+        }
+
+        // Name configured later: the unchanged (skipped) note is healed from
+        // stored utterances — Dave's clean line replaces the note-taker's.
+        let healed = try await GranolaSyncEngine(
+            store: store, client: api, myNames: ["Dave Suzuki"]
+        ).sync()
+        XCTAssertEqual(healed, GranolaSyncStats(added: 0, updated: 0, skipped: 1,
+                                                reattributed: 1))
+        try await store.pool.read { db in
+            let speaker = try String.fetchOne(
+                db, sql: "SELECT self_speaker FROM meetings WHERE id = 's1'"
+            )
+            XCTAssertEqual(speaker, "Dave Suzuki")
+            let fillers = try Int.fetchOne(
+                db, sql: "SELECT filler_count FROM meetings WHERE id = 's1'"
+            )
+            XCTAssertEqual(fillers, 0)
+            let words = try Int.fetchOne(
+                db, sql: "SELECT word_count FROM meetings WHERE id = 's1'"
+            )
+            XCTAssertEqual(words, 9)
+            let hitCount = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM filler_hits")
+            XCTAssertEqual(hitCount, 0)
+        }
+
+        // Steady state: nothing left to heal.
+        let steady = try await GranolaSyncEngine(
+            store: store, client: api, myNames: ["Dave Suzuki"]
+        ).sync()
+        XCTAssertEqual(steady, GranolaSyncStats(added: 0, updated: 0, skipped: 1,
+                                                reattributed: 0))
+    }
+
     func testChangedNoteReanalyzedWithoutDuplicates() async throws {
         let store = try tempStore()
         let transcript = try segments("""

@@ -103,10 +103,10 @@ def test_sync_integration_incremental(monkeypatch, tmp_path):
 
     conn = connect(tmp_path / "fk.db")
     src, _ = _source(monkeypatch)
-    assert sync_meetings(conn, src) == {"added": 2, "updated": 0, "skipped": 0}
+    assert sync_meetings(conn, src) == {"added": 2, "updated": 0, "skipped": 0, "reattributed": 0}
 
     src2, calls2 = _source(monkeypatch)
-    assert sync_meetings(conn, src2) == {"added": 0, "updated": 0, "skipped": 2}
+    assert sync_meetings(conn, src2) == {"added": 0, "updated": 0, "skipped": 2, "reattributed": 0}
     # Second sync refetched nothing already stored; only the still-processing
     # note (not_b, never persisted) is retried.
     assert not any(c[0] in ("notes/not_a", "notes/not_c") for c in calls2)

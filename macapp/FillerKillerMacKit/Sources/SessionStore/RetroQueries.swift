@@ -19,6 +19,9 @@ public struct RetroItem: Identifiable, Sendable, Equatable {
     public let words: Int
     public let fillers: Int
     public let rate: Double
+    /// Which transcript speaker was counted — "Me" unless someone else
+    /// captured the note and the user matched a named speaker instead.
+    public let selfSpeaker: String
 
     public var day: String { String(startedAt.prefix(10)) }
 }
@@ -45,7 +48,8 @@ extension SessionStore {
             let meetings = try Row.fetchAll(
                 db,
                 sql: """
-                SELECT id, title, started_at, word_count, filler_count, per_100_words
+                SELECT id, title, started_at, word_count, filler_count, per_100_words,
+                    self_speaker
                 FROM meetings WHERE word_count > 0 AND started_at >= ?
                 """,
                 arguments: [since]
@@ -56,7 +60,7 @@ extension SessionStore {
                     id: "m:\(id)", source: .meeting, sourceId: id,
                     title: row["title"], startedAt: row["started_at"],
                     words: row["word_count"], fillers: row["filler_count"],
-                    rate: row["per_100_words"]
+                    rate: row["per_100_words"], selfSpeaker: row["self_speaker"]
                 ))
             }
             let sessions = try Row.fetchAll(
@@ -76,7 +80,7 @@ extension SessionStore {
                     title: label ?? "Live session \(id)",
                     startedAt: row["started_at"],
                     words: row["word_count"], fillers: row["filler_count"],
-                    rate: row["per_100_words"]
+                    rate: row["per_100_words"], selfSpeaker: "Me"
                 ))
             }
             return items.sorted { $0.startedAt > $1.startedAt }

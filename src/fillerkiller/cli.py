@@ -25,10 +25,13 @@ def _cmd_sync(args) -> int:
         return 1
     finally:
         conn.close()
-    print(
+    line = (
         f"synced: {stats['added']} new, {stats['updated']} updated, "
         f"{stats['skipped']} unchanged"
     )
+    if stats.get("reattributed"):
+        line += f", {stats['reattributed']} re-attributed (FK_MY_NAME)"
+    print(line)
     return 0
 
 

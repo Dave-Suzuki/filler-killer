@@ -84,6 +84,16 @@ final class AppModel: ObservableObject {
     @AppStorage("showCountWhileListening") var showCountWhileListening = false
     @AppStorage("allowServerRecognition") var allowServerRecognition = false
     @AppStorage("onboarded") var onboarded = false
+    // Names Granola may label the user with in meetings captured by someone
+    // else (comma-separated). Empty falls back to the macOS account name.
+    @AppStorage("granolaMyNames") var granolaMyNames = ""
+
+    var granolaSelfNames: [String] {
+        let configured = granolaMyNames.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        return configured.isEmpty ? [NSFullUserName()] : configured
+    }
 
     @Published var granolaConnected = GranolaKeychain.load() != nil
     @Published var granolaStatus = ""
@@ -397,7 +407,9 @@ final class AppModel: ObservableObject {
         guard !syncing, let store, let key = GranolaKeychain.load() else { return }
         syncing = true
         granolaStatus = "Syncing…"
-        let engine = GranolaSyncEngine(store: store, client: GranolaClient(apiKey: key))
+        let engine = GranolaSyncEngine(
+            store: store, client: GranolaClient(apiKey: key), myNames: granolaSelfNames
+        )
         Task {
             do {
                 let stats = try await engine.sync()

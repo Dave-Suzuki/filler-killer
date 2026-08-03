@@ -137,3 +137,31 @@ final class MergeGoldenTests: XCTestCase {
         }
     }
 }
+
+// MARK: - Self-speaker golden
+
+private struct SelfSpeakerGolden: Decodable {
+    let cases: [SelfSpeakerCase]
+}
+
+private struct SelfSpeakerCase: Decodable {
+    let name: String
+    let utterances: [ExpectedUtterance]
+    let myNames: [String]
+    let expected: String
+}
+
+final class SelfSpeakerGoldenTests: XCTestCase {
+    func testSelfSpeakerCases() throws {
+        let golden = try loadJSON(SelfSpeakerGolden.self, "fixtures/granola/self_speaker.json")
+        XCTAssertFalse(golden.cases.isEmpty)
+        for c in golden.cases {
+            let got = resolveSelfSpeaker(
+                c.utterances.map { Utterance(speaker: $0.speaker, text: $0.text) },
+                myNames: c.myNames
+            )
+            XCTAssertEqual(got, c.expected,
+                           "self-speaker case '\(c.name)' diverged from Python oracle")
+        }
+    }
+}

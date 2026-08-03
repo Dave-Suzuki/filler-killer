@@ -41,6 +41,45 @@ def _speaker(segment: dict) -> str:
     return sp or "Them"
 
 
+def _norm(name: str) -> str:
+    return " ".join(name.split()).casefold()
+
+
+def _name_match(speaker: str, alias: str) -> bool:
+    """Match a diarized speaker label against a configured name. Full match,
+    or first-name-only on either side ("Dave" label vs "Dave Suzuki" alias
+    and vice versa) — Granola labels the same person inconsistently."""
+    if speaker == alias:
+        return True
+    return speaker == alias.split(" ")[0] or speaker.split(" ")[0] == alias
+
+
+def resolve_self_speaker(utterances: list[Utterance], my_names: list[str]) -> str:
+    """Which speaker label is the user in this meeting.
+
+    "Me" is whoever captured the note (their microphone), not necessarily the
+    user: shared meetings someone else recorded label THAT person "Me", and
+    the user's own words show up under their display name. If a named speaker
+    matches one of my_names, count that speaker; otherwise fall back to "Me"
+    (the user's own notes, or no names configured)."""
+    aliases = [a for a in (_norm(n) for n in my_names) if a]
+    if not aliases:
+        return "Me"
+    words: dict[str, int] = {}
+    for u in utterances:
+        if u.speaker in ("Me", "Them"):
+            continue
+        words[u.speaker] = words.get(u.speaker, 0) + len(u.text.split())
+    matched = [
+        s for s in words if any(_name_match(_norm(s), alias) for alias in aliases)
+    ]
+    if not matched:
+        return "Me"
+    # Several labels can match (e.g. "Dave" and "Dave Suzuki"): the one who
+    # spoke the most words wins; name breaks exact ties deterministically.
+    return max(matched, key=lambda s: (words[s], s))
+
+
 def merge_segments(segments: list) -> list[Utterance]:
     """Merge consecutive same-speaker segments so phrases and stutter-repeats
     that span a segment boundary are still detectable."""

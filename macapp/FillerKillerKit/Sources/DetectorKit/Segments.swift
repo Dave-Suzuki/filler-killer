@@ -86,6 +86,44 @@ func resolveSpeaker(_ seg: RawSegment) -> String {
     return "Them"
 }
 
+private func normName(_ name: String) -> String {
+    name.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ").lowercased()
+}
+
+/// Full match, or first-name-only on either side ("Dave" label vs
+/// "Dave Suzuki" alias and vice versa) — Granola labels the same person
+/// inconsistently. Port of _name_match in granola/source.py.
+private func nameMatch(_ speaker: String, _ alias: String) -> Bool {
+    if speaker == alias { return true }
+    let aliasFirst = alias.split(separator: " ").first.map(String.init) ?? alias
+    let speakerFirst = speaker.split(separator: " ").first.map(String.init) ?? speaker
+    return speaker == aliasFirst || speakerFirst == alias
+}
+
+/// Which speaker label is the user in this meeting — port of
+/// resolve_self_speaker in granola/source.py.
+///
+/// "Me" is whoever captured the note (their microphone), not necessarily the
+/// user: shared meetings someone else recorded label THAT person "Me", and
+/// the user's own words show up under their display name. If a named speaker
+/// matches one of myNames, count that speaker; otherwise fall back to "Me".
+public func resolveSelfSpeaker(_ utterances: [Utterance], myNames: [String]) -> String {
+    let aliases = myNames.map(normName).filter { !$0.isEmpty }
+    guard !aliases.isEmpty else { return "Me" }
+    var words: [String: Int] = [:]
+    for utterance in utterances {
+        if utterance.speaker == "Me" || utterance.speaker == "Them" { continue }
+        words[utterance.speaker, default: 0] +=
+            utterance.text.split(whereSeparator: { $0.isWhitespace }).count
+    }
+    let matched = words.keys.filter { speaker in
+        aliases.contains { nameMatch(normName(speaker), $0) }
+    }
+    // Several labels can match (e.g. "Dave" and "Dave Suzuki"): most words
+    // wins; name breaks exact ties deterministically (same as Python's max).
+    return matched.max { (words[$0]!, $0) < (words[$1]!, $1) } ?? "Me"
+}
+
 /// Merge consecutive same-speaker segments so phrases and stutter-repeats
 /// that span a segment boundary are still detectable.
 public func mergeSegments(_ segments: [MaybeSegment]) -> [Utterance] {

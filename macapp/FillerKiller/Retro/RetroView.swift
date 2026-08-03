@@ -304,11 +304,20 @@ struct TranscriptView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 10) {
+                if item.source == .meeting, item.selfSpeaker != "Me" {
+                    Text("Someone else captured this note, so “Me” is their mic — "
+                        + "your counted words are the “\(item.selfSpeaker)” lines.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 ForEach(lines) { line in
                     VStack(alignment: .leading, spacing: 1) {
                         Text(line.speaker)
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(line.speaker == "Me" ? Color.accentColor : .secondary)
+                            .foregroundStyle(
+                                line.speaker == item.selfSpeaker
+                                    ? Color.accentColor : .secondary
+                            )
                         Text(highlighted(line.text, hits: line.hits))
                             .textSelection(.enabled)
                     }

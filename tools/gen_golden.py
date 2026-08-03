@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from fillerkiller.detector import Utterance, analyze_text, analyze_utterances  # noqa: E402
-from fillerkiller.granola.source import merge_segments  # noqa: E402
+from fillerkiller.granola.source import merge_segments, resolve_self_speaker  # noqa: E402
 
 # (name, text, include_vocalized)
 TEXT_CASES = [
@@ -197,6 +197,56 @@ MERGE_CASES = [
     ("not_a_dict_segment_skipped", [{"text": "ok", "source": "microphone"}, "garbage", 42]),
 ]
 
+# Self-speaker resolution cases: (name, utterances, my_names). "Me" is the
+# note-taker, so in a meeting captured by someone else the user is a NAMED
+# speaker — these pin which label gets counted.
+SELF_SPEAKER_CASES = [
+    (
+        "no_names_configured_stays_me",
+        [("Me", "you know it works"), ("Dave Suzuki", "so basically fine")],
+        [],
+    ),
+    (
+        "own_note_no_named_match_stays_me",
+        [("Me", "you know it works"), ("Kelly Schmitt", "agreed")],
+        ["Dave Suzuki"],
+    ),
+    (
+        "captured_by_other_full_name_match",
+        [("Me", "like like a lot of fillers"), ("Dave Suzuki", "sounds good")],
+        ["Dave Suzuki"],
+    ),
+    (
+        "first_name_label_matches_full_alias",
+        [("Me", "yep yep yep"), ("Dave", "I can hear you")],
+        ["Dave Suzuki"],
+    ),
+    (
+        "full_label_matches_first_name_alias",
+        [("Me", "so so so"), ("Dave Suzuki", "okay good")],
+        ["dave"],
+    ),
+    (
+        "case_and_whitespace_insensitive",
+        [("Me", "right right"), ("Dave  Suzuki", "yes")],
+        ["  DAVE   SUZUKI "],
+    ),
+    (
+        "most_words_wins_among_matches",
+        [
+            ("Me", "hello"),
+            ("Dave", "short line"),
+            ("Dave Suzuki", "this longer line has the most words here"),
+        ],
+        ["Dave Suzuki", "Dave"],
+    ),
+    (
+        "them_never_matches",
+        [("Me", "hi"), ("Them", "dave suzuki said something")],
+        ["Dave Suzuki"],
+    ),
+]
+
 
 def hit_dict(h):
     return {
@@ -260,17 +310,35 @@ def main() -> None:
         ],
     }
 
+    self_speaker = {
+        "version": 1,
+        "cases": [
+            {
+                "name": name,
+                "utterances": [{"speaker": s, "text": t} for s, t in utts],
+                "my_names": my_names,
+                "expected": resolve_self_speaker(
+                    [Utterance(s, t) for s, t in utts], my_names
+                ),
+            }
+            for name, utts, my_names in SELF_SPEAKER_CASES
+        ],
+    }
+
     out_detector = ROOT / "fixtures" / "detector" / "golden.json"
     out_merge = ROOT / "fixtures" / "granola" / "merge.json"
+    out_self = ROOT / "fixtures" / "granola" / "self_speaker.json"
     out_detector.parent.mkdir(parents=True, exist_ok=True)
     out_merge.parent.mkdir(parents=True, exist_ok=True)
     out_detector.write_text(json.dumps(detector, indent=1, ensure_ascii=False) + "\n")
     out_merge.write_text(json.dumps(merge, indent=1, ensure_ascii=False) + "\n")
+    out_self.write_text(json.dumps(self_speaker, indent=1, ensure_ascii=False) + "\n")
     n_hits = sum(len(c["expected_hits"]) for c in detector["text_cases"])
     print(
         f"wrote {len(detector['text_cases'])} text cases ({n_hits} hits), "
         f"{len(detector['utterance_cases'])} utterance cases, "
-        f"{len(merge['cases'])} merge cases"
+        f"{len(merge['cases'])} merge cases, "
+        f"{len(self_speaker['cases'])} self-speaker cases"
     )
 
 

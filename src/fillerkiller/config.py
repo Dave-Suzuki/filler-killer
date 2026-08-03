@@ -22,6 +22,14 @@ def granola_cache_path() -> Path:
     return granola_dir() / "cache-v3.json"
 
 
+def my_names() -> list[str]:
+    """FK_MY_NAME: comma-separated names Granola may label the user with in
+    meetings captured by someone else (e.g. "Dave Suzuki,Dave"). Empty means
+    only microphone speech ("Me") is ever counted."""
+    raw = os.environ.get("FK_MY_NAME", "")
+    return [part.strip() for part in raw.split(",") if part.strip()]
+
+
 def granola_api_key() -> str | None:
     return os.environ.get("GRANOLA_API_KEY")
 

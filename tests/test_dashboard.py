@@ -45,6 +45,32 @@ def test_unknown_meeting_404(client):
     assert client.get("/meeting/nope").status_code == 404
 
 
+def test_meeting_captured_by_other_highlights_named_speaker(tmp_path):
+    from fillerkiller.detector import Utterance
+    from fillerkiller.granola.source import Meeting
+
+    class Source:
+        def meetings(self):
+            return [Meeting(
+                id="shared-1", title="Shared Note", started_at="2026-08-03T19:30:00Z",
+                utterances=[
+                    Utterance("Me", "Like, basically it went, you know, well."),
+                    Utterance("Dave Suzuki", "You know, sounds kind of good."),
+                ],
+            )]
+
+    db = tmp_path / "fk.db"
+    conn = connect(db)
+    sync_meetings(conn, Source(), my_names=["Dave Suzuki"])
+    conn.close()
+    resp = TestClient(create_app(db)).get("/meeting/shared-1")
+    assert resp.status_code == 200
+    # Dave's line is highlighted; the note-taker's "Me" line is escaped only.
+    assert "Someone else captured this note" in resp.text
+    assert '<mark class="cat-phrase" title="you know">You know</mark>' in resp.text
+    assert "Like, basically it went, you know, well." in resp.text
+
+
 class TestHighlight:
     def test_wraps_hits_and_escapes(self):
         text = "It was <b>you know</b> fine."

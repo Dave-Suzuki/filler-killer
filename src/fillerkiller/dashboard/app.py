@@ -178,11 +178,14 @@ def create_app(db_path: Path | None = None, source_factory=None) -> FastAPI:
         by_utt: dict[int, list[dict]] = {}
         for h in hits:
             by_utt.setdefault(h["utterance_idx"], []).append(h)
+        # "Me" is the note-taker; for meetings captured by someone else the
+        # user's counted lines are under their own name (meetings.self_speaker).
+        self_speaker = m["self_speaker"]
         transcript = [
             {
                 "speaker": u["speaker"],
                 "html": highlight(u["text"], by_utt.get(u["idx"], []))
-                if u["speaker"] == "Me"
+                if u["speaker"] == self_speaker
                 else html.escape(u["text"]),
             }
             for u in utts

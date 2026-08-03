@@ -1,0 +1,144 @@
+{
+ "version": 1,
+ "cases": [
+  {
+   "name": "no_names_configured_stays_me",
+   "utterances": [
+    {
+     "speaker": "Me",
+     "text": "you know it works"
+    },
+    {
+     "speaker": "Dave Suzuki",
+     "text": "so basically fine"
+    }
+   ],
+   "my_names": [],
+   "expected": "Me"
+  },
+  {
+   "name": "own_note_no_named_match_stays_me",
+   "utterances": [
+    {
+     "speaker": "Me",
+     "text": "you know it works"
+    },
+    {
+     "speaker": "Kelly Schmitt",
+     "text": "agreed"
+    }
+   ],
+   "my_names": [
+    "Dave Suzuki"
+   ],
+   "expected": "Me"
+  },
+  {
+   "name": "captured_by_other_full_name_match",
+   "utterances": [
+    {
+     "speaker": "Me",
+     "text": "like like a lot of fillers"
+    },
+    {
+     "speaker": "Dave Suzuki",
+     "text": "sounds good"
+    }
+   ],
+   "my_names": [
+    "Dave Suzuki"
+   ],
+   "expected": "Dave Suzuki"
+  },
+  {
+   "name": "first_name_label_matches_full_alias",
+   "utterances": [
+    {
+     "speaker": "Me",
+     "text": "yep yep yep"
+    },
+    {
+     "speaker": "Dave",
+     "text": "I can hear you"
+    }
+   ],
+   "my_names": [
+    "Dave Suzuki"
+   ],
+   "expected": "Dave"
+  },
+  {
+   "name": "full_label_matches_first_name_alias",
+   "utterances": [
+    {
+     "speaker": "Me",
+     "text": "so so so"
+    },
+    {
+     "speaker": "Dave Suzuki",
+     "text": "okay good"
+    }
+   ],
+   "my_names": [
+    "dave"
+   ],
+   "expected": "Dave Suzuki"
+  },
+  {
+   "name": "case_and_whitespace_insensitive",
+   "utterances": [
+    {
+     "speaker": "Me",
+     "text": "right right"
+    },
+    {
+     "speaker": "Dave  Suzuki",
+     "text": "yes"
+    }
+   ],
+   "my_names": [
+    "  DAVE   SUZUKI "
+   ],
+   "expected": "Dave  Suzuki"
+  },
+  {
+   "name": "most_words_wins_among_matches",
+   "utterances": [
+    {
+     "speaker": "Me",
+     "text": "hello"
+    },
+    {
+     "speaker": "Dave",
+     "text": "short line"
+    },
+    {
+     "speaker": "Dave Suzuki",
+     "text": "this longer line has the most words here"
+    }
+   ],
+   "my_names": [
+    "Dave Suzuki",
+    "Dave"
+   ],
+   "expected": "Dave Suzuki"
+  },
+  {
+   "name": "them_never_matches",
+   "utterances": [
+    {
+     "speaker": "Me",
+     "text": "hi"
+    },
+    {
+     "speaker": "Them",
+     "text": "dave suzuki said something"
+    }
+   ],
+   "my_names": [
+    "Dave Suzuki"
+   ],
+   "expected": "Me"
+  }
+ ]
+}
