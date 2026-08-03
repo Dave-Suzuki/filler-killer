@@ -68,7 +68,7 @@ public final class GranolaSyncEngine {
                 // added after the meeting was first synced), so the
                 // re-attribution pass below can heal it.
                 if stub.ownerEmail != nil || stub.ownerName != nil {
-                    try store.pool.write { db in
+                    try await store.pool.write { db in
                         try db.execute(
                             sql: """
                             UPDATE meetings SET owner_email = COALESCE(owner_email, ?),
