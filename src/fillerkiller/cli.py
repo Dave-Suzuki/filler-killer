@@ -7,16 +7,16 @@ import webbrowser
 
 def _cmd_sync(args) -> int:
     from fillerkiller.store.db import connect
-    from fillerkiller.sync import sync_meetings
+    from fillerkiller.sync import default_source, sync_meetings
 
-    if args.api:
-        from fillerkiller.granola.api_source import ApiSource
-
-        source = ApiSource()
-    else:
-        from fillerkiller.granola.cache_source import CacheSource
-
-        source = CacheSource()
+    try:
+        source = default_source(
+            force_api=getattr(args, "api", False),
+            legacy=getattr(args, "legacy_api", False),
+        )
+    except Exception as e:
+        print(f"sync failed: {e}", file=sys.stderr)
+        return 1
     conn = connect()
     try:
         stats = sync_meetings(conn, source)
@@ -25,18 +25,35 @@ def _cmd_sync(args) -> int:
         return 1
     finally:
         conn.close()
-    print(
+    line = (
         f"synced: {stats['added']} new, {stats['updated']} updated, "
         f"{stats['skipped']} unchanged"
     )
+    if stats.get("reattributed"):
+        line += f", {stats['reattributed']} re-attributed (FK_MY_NAME)"
+    print(line)
     return 0
 
 
 def _cmd_dashboard(args) -> int:
+    import socket
+
     import uvicorn
 
     from fillerkiller import config
     from fillerkiller.dashboard.app import create_app
+
+    with socket.socket() as probe:
+        if probe.connect_ex((config.DASHBOARD_HOST, config.DASHBOARD_PORT)) == 0:
+            print(
+                f"error: something is already serving on port {config.DASHBOARD_PORT} — "
+                "probably an old fk dashboard from before an update, which would show "
+                "stale pages.\nStop it first:\n"
+                f"  /usr/sbin/lsof -ti :{config.DASHBOARD_PORT} | xargs kill\n"
+                "then run fk dashboard again.",
+                file=sys.stderr,
+            )
+            return 1
 
     if not args.no_sync:
         try:
@@ -77,7 +94,11 @@ def main(argv: list[str] | None = None) -> int:
 
     p_sync = sub.add_parser("sync", help="pull Granola meetings and analyze them")
     p_sync.add_argument("--api", action="store_true",
-                        help="use the Granola HTTP API instead of the local cache")
+                        help="force the official Granola API (needs GRANOLA_API_KEY; "
+                        "used automatically when the key is set)")
+    p_sync.add_argument("--legacy-api", action="store_true", dest="legacy_api",
+                        help="unofficial API with the desktop app's token "
+                        "(pre-encryption Granola installs only)")
     p_sync.set_defaults(func=_cmd_sync)
 
     p_dash = sub.add_parser("dashboard", help="sync, then serve the local dashboard")

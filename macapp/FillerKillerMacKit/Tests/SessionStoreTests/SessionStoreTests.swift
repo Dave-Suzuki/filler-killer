@@ -1,0 +1,110 @@
+import DetectorKit
+import GRDB
+import XCTest
+@testable import SessionStore
+
+final class SessionStoreTests: XCTestCase {
+    private func tempURL() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            .appendingPathComponent("fk.db")
+    }
+
+    func testRecorderRoundtrip() throws {
+        let store = try SessionStore(url: tempURL())
+        let recorder = LiveSessionRecorder(store: store)
+        try recorder.begin()
+
+        let texts = ["Um so I think this works", "nothing wrong here"]
+        for (idx, text) in texts.enumerated() {
+            let hits = analyzeText(text, utteranceIdx: idx, includeVocalized: true)
+            try recorder.record(segmentIdx: idx, text: text, at: Date(), hits: hits)
+        }
+        let id = try recorder.finish(
+            label: "test call", wordCount: 8, fillerCount: 2, per100Words: 25.0
+        )
+        XCTAssertNotNil(id)
+
+        try store.pool.read { db in
+            guard let session = try Row.fetchOne(
+                db, sql: "SELECT * FROM live_sessions WHERE id = ?", arguments: [id]
+            ) else {
+                return XCTFail("session row missing")
+            }
+            XCTAssertEqual(session["label"] as String?, "test call")
+            XCTAssertNotNil(session["ended_at"] as String?)
+            let segments = try Row.fetchAll(
+                db, sql: "SELECT idx, text FROM live_segments WHERE session_id = ? ORDER BY idx",
+                arguments: [id]
+            )
+            XCTAssertEqual(segments.map { $0["text"] as String }, texts)
+            // Every hit's span slices back to its term within its segment.
+            let hits = try Row.fetchAll(
+                db,
+                sql: "SELECT segment_idx, term, start, \"end\" FROM live_hits WHERE session_id = ?",
+                arguments: [id]
+            )
+            XCTAssertFalse(hits.isEmpty)
+            for hit in hits {
+                let text = texts[hit["segment_idx"] as Int]
+                let scalars = Array(text.unicodeScalars)
+                let start = hit["start"] as Int
+                let end = hit["end"] as Int
+                var view = String.UnicodeScalarView()
+                for scalar in scalars[start ..< end] { view.append(scalar) }
+                XCTAssertEqual(String(view).lowercased(), hit["term"] as String)
+            }
+        }
+        XCTAssertEqual(try store.savedSessionCount(), 1)
+    }
+
+    func testCrashMidSessionKeepsSegmentsButNotInTrends() throws {
+        let url = tempURL()
+        let store = try SessionStore(url: url)
+        let recorder = LiveSessionRecorder(store: store)
+        try recorder.begin()
+        try recorder.record(
+            segmentIdx: 0, text: "you know the drill", at: Date(),
+            hits: analyzeText("you know the drill")
+        )
+        // No finish() — simulate a crash; a fresh store sees the data but the
+        // session is excluded from saved counts (ended_at IS NULL).
+        let reopened = try SessionStore(url: url)
+        let segments = try reopened.pool.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM live_segments") ?? 0
+        }
+        XCTAssertEqual(segments, 1)
+        XCTAssertEqual(try reopened.savedSessionCount(), 0)
+    }
+
+    func testDiscardCascades() throws {
+        let store = try SessionStore(url: tempURL())
+        let recorder = LiveSessionRecorder(store: store)
+        try recorder.begin()
+        try recorder.record(
+            segmentIdx: 0, text: "um right", at: Date(), hits: analyzeText("um right")
+        )
+        try recorder.discard()
+        try store.pool.read { db in
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM live_sessions"), 0)
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM live_segments"), 0)
+            XCTAssertEqual(try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM live_hits"), 0)
+        }
+    }
+
+    func testLegacyImportCopiesOnce() throws {
+        let legacy = tempURL()
+        let destination = tempURL()
+        // Build a "legacy" database with one saved session.
+        let legacyStore = try SessionStore(url: legacy)
+        let recorder = LiveSessionRecorder(store: legacyStore)
+        try recorder.begin()
+        try recorder.finish(label: "old", wordCount: 1, fillerCount: 0, per100Words: 0)
+
+        XCTAssertTrue(try LegacyImport.importIfNeeded(from: legacy, to: destination))
+        let imported = try SessionStore(url: destination)
+        XCTAssertEqual(try imported.savedSessionCount(), 1)
+        // Second run is a no-op: destination already exists.
+        XCTAssertFalse(try LegacyImport.importIfNeeded(from: legacy, to: destination))
+    }
+}

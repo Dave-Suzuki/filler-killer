@@ -14,7 +14,7 @@ def _conn(tmp_path):
 def test_full_sync_persists_meetings_and_hits(tmp_path):
     conn = _conn(tmp_path)
     stats = sync_meetings(conn, CacheSource(FIXTURE))
-    assert stats == {"added": 2, "updated": 0, "skipped": 0}
+    assert stats == {"added": 2, "updated": 0, "skipped": 0, "reattributed": 0}
 
     row = conn.execute("SELECT * FROM meetings WHERE id = 'meet-001'").fetchone()
     assert row["title"] == "Weekly 1:1"
@@ -49,7 +49,7 @@ def test_resync_skips_unchanged(tmp_path):
     conn = _conn(tmp_path)
     sync_meetings(conn, CacheSource(FIXTURE))
     stats = sync_meetings(conn, CacheSource(FIXTURE))
-    assert stats == {"added": 0, "updated": 0, "skipped": 2}
+    assert stats == {"added": 0, "updated": 0, "skipped": 2, "reattributed": 0}
 
 
 def test_updated_meeting_reanalyzed(tmp_path):

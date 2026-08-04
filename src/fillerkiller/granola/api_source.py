@@ -14,8 +14,7 @@ import urllib.request
 from pathlib import Path
 
 from fillerkiller import config
-from fillerkiller.detector import Utterance
-from fillerkiller.granola.source import Meeting
+from fillerkiller.granola.source import Meeting, merge_segments
 
 _API = "https://api.granola.ai"
 
@@ -88,14 +87,7 @@ class ApiSource:
             segments = transcript if isinstance(transcript, list) else transcript.get(
                 "transcript", []
             )
-            utts = [
-                Utterance(
-                    "Me" if seg.get("source") == "microphone" else "Them",
-                    (seg.get("text") or "").strip(),
-                )
-                for seg in segments
-                if isinstance(seg, dict) and (seg.get("text") or "").strip()
-            ]
+            utts = merge_segments(segments)
             if not utts:
                 continue
             out.append(

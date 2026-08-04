@@ -68,3 +68,25 @@ def test_empty_session_persists_zero_rate(tmp_path):
         "SELECT per_100_words FROM live_sessions WHERE id = ?", (session_id,)
     ).fetchone()
     assert row["per_100_words"] == 0.0
+
+
+def test_segments_stored_with_hits_spans(tmp_path):
+    conn = connect(tmp_path / "fk.db")
+    c = SessionCounter()
+    for seg in SEGMENTS:
+        c.add_final(seg)
+    session_id = c.persist(conn, label="test call")
+
+    segs = conn.execute(
+        "SELECT idx, text FROM live_segments WHERE session_id = ? ORDER BY idx",
+        (session_id,),
+    ).fetchall()
+    assert [s["text"] for s in segs] == SEGMENTS
+
+    # Every hit's span slices back to its term within its segment.
+    for h in conn.execute(
+        'SELECT segment_idx, term, start, "end" FROM live_hits WHERE session_id = ?',
+        (session_id,),
+    ):
+        text = SEGMENTS[h["segment_idx"]]
+        assert text[h["start"] : h["end"]].lower() == h["term"]

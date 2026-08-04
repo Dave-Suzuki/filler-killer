@@ -1,10 +1,14 @@
 """Primary Granola source: the desktop app's local cache file.
 
-~/Library/Application Support/Granola/cache-v3.json is double-encoded JSON:
-an outer envelope whose "cache" value is itself a JSON string containing
-{"state": {"documents": {...}, "transcripts": {...}}}. Transcript segments
-carry source="microphone" (the note-taker, i.e. Me) or source="system"
-(everyone else coming through the speakers).
+Handles both historical shapes:
+- cache-v3.json: double-encoded — the outer "cache" value is itself a JSON
+  string containing {"state": {"documents": ..., "transcripts": ...}}.
+- cache-v6.json: single-encoded — "cache" is a plain object with the same
+  state shape.
+
+Granola >= 7.427 encrypts the cache (cache-v6.json.enc) with a key only
+Granola-signed code can read — on those installs use PublicApiSource
+(GRANOLA_API_KEY) instead; fk doctor detects this and says so.
 
 The format is undocumented and may drift with Granola updates, so parsing is
 deliberately defensive: unknown shapes are skipped, never fatal. Verify
@@ -15,8 +19,7 @@ import json
 from pathlib import Path
 
 from fillerkiller import config
-from fillerkiller.detector import Utterance
-from fillerkiller.granola.source import Meeting
+from fillerkiller.granola.source import Meeting, merge_segments
 
 
 class CacheParseError(Exception):
@@ -48,31 +51,6 @@ def _load_state(path: Path) -> dict:
     return state
 
 
-def _speaker(segment: dict) -> str:
-    source = segment.get("source", "")
-    if source == "microphone":
-        return "Me"
-    return segment.get("speaker") or "Them"
-
-
-def _utterances(segments: list) -> list[Utterance]:
-    """Merge consecutive same-speaker segments so phrases and stutter-repeats
-    that span a segment boundary are still detectable."""
-    merged: list[Utterance] = []
-    for seg in segments:
-        if not isinstance(seg, dict):
-            continue
-        text = (seg.get("text") or "").strip()
-        if not text:
-            continue
-        speaker = _speaker(seg)
-        if merged and merged[-1].speaker == speaker:
-            merged[-1].text += " " + text
-        else:
-            merged.append(Utterance(speaker, text))
-    return merged
-
-
 class CacheSource:
     def __init__(self, path: Path | None = None):
         self.path = path or config.granola_cache_path()
@@ -91,7 +69,7 @@ class CacheSource:
             segments = transcripts.get(doc_id)
             if not segments:
                 continue  # meetings without transcripts can't be analyzed
-            utts = _utterances(segments)
+            utts = merge_segments(segments)
             if not utts:
                 continue
             out.append(

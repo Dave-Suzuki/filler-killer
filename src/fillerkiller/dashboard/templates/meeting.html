@@ -3,6 +3,11 @@
 {% block content %}
 <p><a href="/">&larr; all meetings</a></p>
 <h2 style="font-size:1.2rem">{{ m.title }} <span style="color:var(--muted);font-weight:400">— {{ m.started_at[:10] }}</span></h2>
+{% if m.self_speaker == '' %}
+<p style="color:var(--muted)">Not counted — {{ m.owner_name or m.owner_email or 'someone else' }} captured this note and you don't appear in the transcript, so none of it goes into your stats.</p>
+{% elif m.self_speaker != 'Me' %}
+<p style="color:var(--muted)">Someone else captured this note, so “Me” is their mic — your counted words are the <strong>{{ m.self_speaker }}</strong> lines.</p>
+{% endif %}
 
 <div class="cards">
   <div class="card"><div class="num">{{ m.per_100_words }}</div><div class="lbl">fillers per 100 words</div></div>
@@ -25,7 +30,7 @@
 <div class="panel">
   <h2>Transcript (your fillers highlighted)</h2>
   {% for u in transcript %}
-  <p class="utt {{ 'me' if u.speaker == 'Me' else '' }}">
+  <p class="utt {{ 'me' if u.speaker == m.self_speaker else '' }}">
     <span class="spk">{{ u.speaker }}</span>{{ u.html | safe }}
   </p>
   {% endfor %}

@@ -1,0 +1,118 @@
+name: macapp
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # Fast feedback: the pure-Swift package (DetectorKit + golden parity tests)
+  # builds and tests on Linux before the slower macOS job.
+  linux-swift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.0"
+      - run: swift test --package-path macapp/FillerKillerKit
+
+  mac-build:
+    runs-on: macos-15
+    permissions:
+      contents: write # publish Releases from main builds
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate --spec macapp/project.yml --project macapp
+      - name: Package tests (incl. golden parity)
+        run: swift test --package-path macapp/FillerKillerKit
+      - name: Mac-only package tests (SessionStore/GRDB)
+        run: swift test --package-path macapp/FillerKillerMacKit
+      - name: Build app (Release, ad-hoc signed)
+        run: |
+          xcodebuild -project macapp/FillerKiller.xcodeproj \
+            -target FillerKiller -configuration Release build \
+            SYMROOT="$PWD/macapp/build" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=YES
+          # Verify the entitlements actually made it onto the signature —
+          # hardened runtime silently denies the mic without audio-input.
+          codesign -d --entitlements - macapp/build/Release/FillerKiller.app \
+            | grep -q "com.apple.security.device.audio-input"
+      # With Developer ID secrets configured, the artifact is a notarized DMG
+      # (drag to Applications, double-click — no terminal). Without them, the
+      # ad-hoc zip + xattr instructions ship as before, and this step is a
+      # no-op that keeps CI green.
+      - name: Sign, notarize & package
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          cd macapp/build/Release
+          mkdir -p dist
+          if [ -z "${MACOS_CERT_P12:-}" ]; then
+            echo "No Developer ID secrets — shipping the ad-hoc zip." >&2
+            cat > README-INSTALL.txt <<'EOF'
+          Unsigned development build.
+          1. Unzip
+          2. Remove the quarantine flag:
+               xattr -dr com.apple.quarantine FillerKiller.app
+          3. Open FillerKiller.app — look for the waveform icon in the menu bar.
+          EOF
+            ditto -c -k --keepParent FillerKiller.app dist/FillerKiller-app.zip
+            zip -q dist/FillerKiller-app.zip README-INSTALL.txt
+            exit 0
+          fi
+          KEYCHAIN=fk-ci.keychain
+          security create-keychain -p ci "$KEYCHAIN"
+          security default-keychain -s "$KEYCHAIN"
+          security unlock-keychain -p ci "$KEYCHAIN"
+          echo "$MACOS_CERT_P12" | base64 --decode > cert.p12
+          security import cert.p12 -k "$KEYCHAIN" -P "$MACOS_CERT_PASSWORD" \
+            -T /usr/bin/codesign
+          rm -f cert.p12
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci "$KEYCHAIN"
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" \
+            | awk -F'"' '/Developer ID Application/ {print $2; exit}')
+          echo "Signing as: $IDENTITY"
+          codesign --force --deep --options runtime --timestamp \
+            --entitlements ../../FillerKiller/FillerKiller.entitlements \
+            --sign "$IDENTITY" FillerKiller.app
+          mkdir -p dmgroot
+          cp -R FillerKiller.app dmgroot/
+          ln -s /Applications dmgroot/Applications
+          hdiutil create -volname "Filler Killer" -srcfolder dmgroot -ov \
+            -format UDZO "dist/FillerKiller-b${RUN_NUMBER}.dmg"
+          xcrun notarytool submit "dist/FillerKiller-b${RUN_NUMBER}.dmg" \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple "dist/FillerKiller-b${RUN_NUMBER}.dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          # Unique per run so repeated downloads never collide as "(2).zip".
+          name: FillerKiller-b${{ github.run_number }}
+          path: macapp/build/Release/dist/*
+          retention-days: 14
+      # Every main build becomes a Release — a stable, no-login-maze download
+      # link for colleagues (repo Releases page → latest).
+      - name: Publish release (main only)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          VERSION=$(sed -n 's/.*MARKETING_VERSION: "\(.*\)"/\1/p' macapp/project.yml | head -1)
+          TAG="v${VERSION}-b${RUN_NUMBER}"
+          gh release create "$TAG" macapp/build/Release/dist/* \
+            --title "Filler Killer ${TAG}" \
+            --generate-notes \
+            --latest

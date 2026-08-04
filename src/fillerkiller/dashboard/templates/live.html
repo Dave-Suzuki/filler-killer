@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}{{ s.label or "Live session " ~ s.id }} — filler-killer{% endblock %}
+{% block content %}
+<p><a href="/">&larr; dashboard</a></p>
+<h2 style="font-size:1.2rem">{{ s.label or "Live session " ~ s.id }}
+  <span style="color:var(--muted);font-weight:400">— {{ s.started_at[:10] }}</span></h2>
+
+<div class="cards">
+  <div class="card"><div class="num">{{ s.per_100_words }}</div><div class="lbl">fillers per 100 words</div></div>
+  <div class="card"><div class="num">{{ s.filler_count }}</div><div class="lbl">fillers</div></div>
+  <div class="card"><div class="num">{{ s.word_count }}</div><div class="lbl">words spoken</div></div>
+</div>
+
+{% if term_counts %}
+<div class="panel">
+  <h2>Breakdown</h2>
+  <table>
+    <tr><th>Filler</th><th class="num">Count</th></tr>
+    {% for term, n in term_counts %}
+    <tr><td>{{ term }}</td><td class="num">{{ n }}</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+<div class="panel">
+  <h2>Session log (fillers highlighted)</h2>
+  {% if transcript %}
+  {% for seg in transcript %}
+  <p class="utt me">
+    <span class="spk">{{ seg.at }}</span>{{ seg.html | safe }}
+  </p>
+  {% endfor %}
+  <div class="legend">
+    <mark class="cat-vocalized">um / uh</mark>
+    <mark class="cat-phrase">phrase</mark>
+    <mark class="cat-discourse">discourse (like / so)</mark>
+    <mark class="cat-repetition">stutter repeat</mark>
+  </div>
+  {% else %}
+  <p style="color:var(--muted)">No transcript stored for this session (recorded
+  with an older version of fk listen).</p>
+  {% endif %}
+</div>
+{% endblock %}

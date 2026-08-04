@@ -1,0 +1,181 @@
+{
+ "version": 1,
+ "cases": [
+  {
+   "name": "nested_speaker_attribution_me",
+   "segments": [
+    {
+     "text": "So basically we",
+     "speaker": {
+      "source": "microphone",
+      "attribution": "me"
+     }
+    },
+    {
+     "text": "should ship it.",
+     "speaker": {
+      "source": "microphone",
+      "attribution": "me"
+     }
+    },
+    {
+     "text": "Agreed.",
+     "speaker": {
+      "source": "system",
+      "attribution": "them"
+     }
+    }
+   ],
+   "expected": [
+    {
+     "speaker": "Me",
+     "text": "So basically we should ship it."
+    },
+    {
+     "speaker": "Them",
+     "text": "Agreed."
+    }
+   ]
+  },
+  {
+   "name": "flat_source_shape",
+   "segments": [
+    {
+     "text": "I I think we're aligned.",
+     "source": "microphone"
+    },
+    {
+     "text": "Sounds good.",
+     "source": "system"
+    },
+    {
+     "text": "Great.",
+     "source": "system"
+    }
+   ],
+   "expected": [
+    {
+     "speaker": "Me",
+     "text": "I I think we're aligned."
+    },
+    {
+     "speaker": "Them",
+     "text": "Sounds good. Great."
+    }
+   ]
+  },
+  {
+   "name": "named_speaker_nested",
+   "segments": [
+    {
+     "text": "Hello there.",
+     "speaker": {
+      "source": "system",
+      "name": "Prateek"
+     }
+    },
+    {
+     "text": "Hi.",
+     "speaker": {
+      "source": "microphone",
+      "attribution": "me"
+     }
+    }
+   ],
+   "expected": [
+    {
+     "speaker": "Prateek",
+     "text": "Hello there."
+    },
+    {
+     "speaker": "Me",
+     "text": "Hi."
+    }
+   ]
+  },
+  {
+   "name": "flat_named_speaker_string",
+   "segments": [
+    {
+     "text": "Hello.",
+     "source": "system",
+     "speaker": "Chelsea"
+    },
+    {
+     "text": "More.",
+     "source": "system",
+     "speaker": "Chelsea"
+    }
+   ],
+   "expected": [
+    {
+     "speaker": "Chelsea",
+     "text": "Hello. More."
+    }
+   ]
+  },
+  {
+   "name": "empty_and_whitespace_segments_skipped",
+   "segments": [
+    {
+     "text": "  ",
+     "source": "microphone"
+    },
+    {
+     "text": "Real text.",
+     "source": "microphone"
+    },
+    {
+     "text": "",
+     "source": "system"
+    },
+    {
+     "text": null,
+     "source": "system"
+    }
+   ],
+   "expected": [
+    {
+     "speaker": "Me",
+     "text": "Real text."
+    }
+   ]
+  },
+  {
+   "name": "merge_across_boundary_enables_phrase",
+   "segments": [
+    {
+     "text": "It was kind of",
+     "source": "microphone"
+    },
+    {
+     "text": "hard to schedule.",
+     "source": "microphone"
+    }
+   ],
+   "expected": [
+    {
+     "speaker": "Me",
+     "text": "It was kind of hard to schedule."
+    }
+   ]
+  },
+  {
+   "name": "not_a_dict_segment_skipped",
+   "segments": [
+    {
+     "text": "ok",
+     "source": "microphone"
+    },
+    "garbage",
+    42
+   ],
+   "expected": [
+    {
+     "speaker": "Me",
+     "text": "ok"
+    }
+   ]
+  }
+ ]
+}

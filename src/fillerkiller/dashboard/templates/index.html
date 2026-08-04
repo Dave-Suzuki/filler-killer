@@ -1,5 +1,18 @@
 {% extends "base.html" %}
 {% block content %}
+<div class="toolbar">
+  <nav class="ranges">
+    {% for key, label in range_labels.items() %}
+    <a href="/?range={{ key }}" class="{{ 'active' if key == range else '' }}">{{ label }}</a>
+    {% endfor %}
+  </nav>
+  <form method="post" action="/sync?range={{ range }}">
+    <button type="submit">↻ Refresh from Granola</button>
+  </form>
+</div>
+{% if synced %}<p class="notice">Synced: {{ synced }}</p>{% endif %}
+{% if sync_error %}<p class="notice error">Sync failed: {{ sync_error }}</p>{% endif %}
+
 <div class="cards">
   <div class="card"><div class="num">{{ overall }}</div><div class="lbl">fillers per 100 words (all time)</div></div>
   <div class="card"><div class="num">{{ total_fillers }}</div><div class="lbl">total fillers caught</div></div>
@@ -40,7 +53,7 @@
     {% for s in sessions %}
     <tr>
       <td>{{ s.started_at[:10] }}</td>
-      <td>{{ s.label or "Live session " ~ s.id }}</td>
+      <td><a href="/live/{{ s.id }}">{{ s.label or "Live session " ~ s.id }}</a></td>
       <td class="num">{{ s.word_count }}</td>
       <td class="num">{{ s.filler_count }}</td>
       <td class="num">{{ s.per_100_words }}</td>
@@ -59,19 +72,27 @@ const line = css.getPropertyValue('--line').trim();
 
 new Chart(document.getElementById('trend'), {
   type: 'line',
-  data: { datasets: [
-    { label: 'Granola meetings', data: data.meetings, borderColor: accent,
-      backgroundColor: accent, tension: .25, pointRadius: 3 },
-    { label: 'Live sessions', data: data.sessions, borderColor: muted,
-      backgroundColor: muted, tension: .25, pointRadius: 3 },
+  data: { labels: data.labels, datasets: [
+    { label: 'Daily average', data: data.meetings_daily, borderColor: accent,
+      backgroundColor: accent, tension: .3, pointRadius: 2.5, borderWidth: 2.5,
+      order: 0 },
+    { label: 'Individual meetings', data: data.meetings_points, showLine: false,
+      backgroundColor: accent + '40', pointRadius: 2.5, order: 1 },
+    { label: 'Live sessions (avg)', data: data.sessions_daily, borderColor: muted,
+      backgroundColor: muted, tension: .3, pointRadius: 2.5, borderWidth: 2,
+      order: 0, hidden: data.sessions_daily.length === 0 },
+    { label: 'Individual sessions', data: data.sessions_points, showLine: false,
+      backgroundColor: muted + '55', pointRadius: 2.5, order: 1,
+      hidden: data.sessions_points.length === 0 },
   ]},
   options: {
     parsing: { xAxisKey: 'x', yAxisKey: 'y' },
-    scales: { x: { type: 'category', grid: { color: line } },
+    scales: { x: { type: 'category', grid: { display: false } },
               y: { beginAtZero: true, grid: { color: line },
                    title: { display: true, text: 'fillers / 100 words' } } },
     plugins: { tooltip: { callbacks: {
-      title: items => items.map(i => i.raw.title) } } }
+      title: items => items.map(i =>
+        i.raw.title ?? (i.raw.x + (i.raw.n ? ` — avg of ${i.raw.n}` : ''))) } } }
   }
 });
 
