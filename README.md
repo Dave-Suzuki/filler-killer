@@ -13,6 +13,26 @@ you lean on, so your next meeting has fewer of them. It works two ways:
 **Private by design:** audio and transcripts never leave your Mac, and only
 *your* words are analyzed — never your colleagues'.
 
+## Highlights
+
+- **Months of history, instantly** — connect Granola and the first sync
+  analyzes your whole backlog of past meetings, not just new ones.
+- **A goal, not just a number** — set a target rate; Trends draws it as a
+  line and colors every stat against it, with a delta vs. the previous
+  period so you can see yourself improving.
+- **Carrot and stick** — a discreet pill flashes when a filler slips out,
+  and a green streak counter celebrates clean runs (best run saved per
+  session).
+- **Safe on calls** — Zoom/Meet and Filler Killer share the mic without
+  conflict, the pill is invisible to screen shares, and the menu bar count
+  is hidden by default while listening so nobody sees your tally.
+- **Honest controls** — Pause genuinely stops the microphone (no "paused
+  but still listening"), and your data is one local SQLite file with a
+  delete-everything button in Settings.
+- **No account, no subscription, no cloud** — recognition runs on Apple's
+  on-device engine; the only network call is fetching your own Granola
+  notes, if you connect them.
+
 ## Get started (5 minutes)
 
 ### 1. Install the app
@@ -37,8 +57,9 @@ Look for the waveform icon in your menu bar.
 ### 2. Grant two permissions
 
 Click **Start Listening** once. macOS asks for **Microphone** and
-**Speech Recognition** — allow both. Everything runs on-device; if the app
-says the offline model is missing, enable Dictation once
+**Speech Recognition** — allow both. Zoom and Filler Killer can use the mic
+at the same time. Everything runs on-device; if the app says the offline
+model is missing, enable Dictation once
 (System Settings → Keyboard → Dictation) to download it.
 
 ### 3. Connect Granola (recommended)
@@ -68,8 +89,11 @@ There's also a **Sync Granola** button front and center.
 - **End Session → Save** — then hit **View Session Report** to see your
   transcript with every filler highlighted.
 - **Trends** shows your rate over time (Day / 3 Days / Week / Month /
-  3 Months / All), your favorite filler words, and every meeting and
-  session — click any of them for the highlighted transcript.
+  3 Months / All) against your goal line, the change vs. the previous
+  period, your favorite filler words, and every meeting and session —
+  click any of them for the highlighted transcript.
+- **Settings** holds your goal rate, the option to show the live count in
+  the menu bar, and the privacy controls (reveal or delete all data).
 
 ## What gets counted
 
