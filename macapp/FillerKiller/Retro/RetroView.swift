@@ -185,6 +185,21 @@ struct RetroView: View {
         }
     }
 
+    /// "YYYY-MM-DD" -> Date. Plotting Dates (not day strings) keeps the x
+    /// axis continuous: with a categorical String axis, Swift Charts labels
+    /// EVERY day and the labels overlap into an unreadable smear.
+    private static let dayParser: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    private func dayDate(_ day: String) -> Date {
+        Self.dayParser.date(from: day) ?? Date(timeIntervalSince1970: 0)
+    }
+
     private var trendChart: some View {
         GroupBox("Daily rate") {
             if model.daily.isEmpty {
@@ -196,7 +211,7 @@ struct RetroView: View {
                 Chart {
                     ForEach(model.daily) { point in
                         AreaMark(
-                            x: .value("Day", point.day),
+                            x: .value("Day", dayDate(point.day)),
                             y: .value("Rate", point.rate)
                         )
                         .interpolationMethod(.monotone)
@@ -207,7 +222,7 @@ struct RetroView: View {
                             )
                         )
                         LineMark(
-                            x: .value("Day", point.day),
+                            x: .value("Day", dayDate(point.day)),
                             y: .value("Rate", point.rate)
                         )
                         .interpolationMethod(.monotone)
@@ -216,7 +231,7 @@ struct RetroView: View {
                     }
                     if let last = model.daily.last {
                         PointMark(
-                            x: .value("Day", last.day),
+                            x: .value("Day", dayDate(last.day)),
                             y: .value("Rate", last.rate)
                         )
                         .symbolSize(30)
@@ -243,7 +258,8 @@ struct RetroView: View {
                 }
                 .chartXAxis {
                     AxisMarks(values: .automatic(desiredCount: 5)) {
-                        AxisValueLabel()
+                        AxisGridLine().foregroundStyle(.quaternary)
+                        AxisValueLabel(format: .dateTime.month(.abbreviated).day())
                     }
                 }
                 .frame(minHeight: 180)
