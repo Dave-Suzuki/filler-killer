@@ -24,9 +24,7 @@ struct PopoverView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if model.granolaConnected {
-                granolaRow
-            }
+            granolaRow
             Divider()
             footer
         }
@@ -213,21 +211,34 @@ struct PopoverView: View {
 
     private var granolaRow: some View {
         HStack(spacing: 8) {
-            Button {
-                model.syncGranolaNow()
-            } label: {
-                Label(model.syncing ? "Syncing…" : "Sync Granola",
-                      systemImage: "arrow.triangle.2.circlepath")
-            }
-            .controlSize(.small)
-            .disabled(model.syncing)
-            Spacer()
-            if !model.granolaStatus.isEmpty {
-                Text(model.granolaStatus)
+            if model.granolaConnected {
+                Button {
+                    model.syncGranolaNow()
+                } label: {
+                    Label(model.syncing ? "Syncing…" : "Sync Granola",
+                          systemImage: "arrow.triangle.2.circlepath")
+                }
+                .controlSize(.small)
+                .disabled(model.syncing)
+                Spacer()
+                if !model.granolaStatus.isEmpty {
+                    Text(model.granolaStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            } else {
+                Button {
+                    model.openTrends { openWindow(id: "granola") }
+                } label: {
+                    Label("Connect Granola…", systemImage: "link")
+                }
+                .controlSize(.small)
+                Spacer()
+                Text("Analyze past meetings")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
             }
         }
     }
@@ -262,25 +273,13 @@ struct PopoverView: View {
             }
             .buttonStyle(.plain)
             Spacer()
-            Menu {
-                if model.granolaConnected {
-                    Button("Sync Granola Now") { model.syncGranolaNow() }
-                } else {
-                    Button("Connect Granola…") {
-                        model.openTrends { openWindow(id: "granola") }
-                    }
-                }
-                Divider()
-                Text(AppModel.versionLine)
-                Button("Quit Filler Killer") {
-                    NSApplication.shared.terminate(nil)
-                }
+            Button {
+                NSApplication.shared.terminate(nil)
             } label: {
-                Image(systemName: "ellipsis.circle")
+                Label("Quit", systemImage: "power")
             }
             .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-            .fixedSize()
+            .help(AppModel.versionLine)
         }
         .font(.system(size: 12))
     }

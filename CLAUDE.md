@@ -26,9 +26,10 @@ Other lessons from working with Dave's terminal:
   absolute paths (/usr/bin/curl) in diagnostic one-liners.
 - Repeated artifact downloads used to collide as "(2).zip" — artifact names
   now include the CI run number; keep it that way.
-- The menu footer shows the installed version+build (e.g. v0.7.0 (b20)); ask
-  for it when debugging field reports, plus Settings → Advanced →
-  Copy Diagnostics for the engine event log.
+- The installed version+build (e.g. v0.8.0 (b31)) lives in Settings →
+  Advanced (also a tooltip on the popover's Quit button); ask for it when
+  debugging field reports, plus Settings → Advanced → Copy Diagnostics for
+  the engine event log.
 - Field lesson (b20): newer macOS on-device speech recognition can deliver
   partials forever without ever sending isFinal OR a silence error — anything
   counting only finalized segments counts nothing. Fixed by the stability
