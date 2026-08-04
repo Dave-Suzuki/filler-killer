@@ -1,20 +1,78 @@
-# filler-killer
+# Filler Killer
 
-Say what you mean. filler-killer helps you eliminate filler words two ways:
+Say what you mean. Filler Killer counts the "um"s, "you know"s and "like"s
+you lean on, so your next meeting has fewer of them. It works two ways:
 
-1. **Reflection** — analyzes your [Granola](https://granola.ai) meeting transcripts
-   after the fact: which fillers you lean on, how often, and whether you're
-   improving week over week.
-2. **Real-time** — listens to your mic during a call (Zoom or anything else),
-   transcribes **on-device** with Apple's Speech framework (free, private — audio
-   never leaves your Mac), and shows a live filler counter in your menu bar.
+1. **Reflection** — analyzes your [Granola](https://granola.ai) meeting
+   transcripts after the fact: which fillers you favor, how often, and
+   whether you're improving week over week.
+2. **Real-time** — listens to your mic during a call (Zoom or anything
+   else), transcribes **on-device** with Apple's speech engine, and nudges
+   you with a discreet on-screen counter — invisible to screen shares.
 
-Only *your* words are analyzed: Granola labels the note-taker's speech as "Me",
-and the live listener hears only your own mic.
+**Private by design:** audio and transcripts never leave your Mac, and only
+*your* words are analyzed — never your colleagues'.
+
+## Get started (5 minutes)
+
+### 1. Install the app
+
+Download the latest `FillerKiller-b<number>` from this repo's
+[Actions page](../../actions/workflows/macapp.yml) (pick the newest green
+run, artifact at the bottom) — or ask Dave for the current build.
+
+- If it contains **`FillerKiller-b<number>.dmg`**: open it, drag
+  Filler Killer to Applications, launch it. Done.
+- If it contains **`FillerKiller-app.zip`** (unsigned dev build): unzip,
+  then clear macOS quarantine once before first launch — paste this in
+  Terminal from the folder holding the app:
+
+  ```bash
+  xattr -dr com.apple.quarantine FillerKiller.app && open FillerKiller.app
+  ```
+
+Look for the waveform icon in your menu bar.
+
+### 2. Grant two permissions
+
+Click **Start Listening** once. macOS asks for **Microphone** and
+**Speech Recognition** — allow both. Everything runs on-device; if the app
+says the offline model is missing, enable Dictation once
+(System Settings → Keyboard → Dictation) to download it.
+
+### 3. Connect Granola (recommended)
+
+In the app popover: **Connect Granola…**
+
+1. In the Granola desktop app, create an API key (Settings → API keys —
+   on some plans a workspace admin must enable personal API keys first).
+2. Paste the `grn_…` key and hit **Validate & Connect**.
+3. Fill in **who you are**: the name(s) Granola labels you with in
+   transcripts (e.g. `Jane Doe,Jane`) and your Granola account email.
+
+That last step matters: in a Granola transcript, "Me" is whoever *captured*
+the note. Your name + email let Filler Killer count **your** lines in
+meetings a colleague recorded, and skip meetings you didn't speak in at all.
+
+Meetings then sync automatically — on launch, within ~15 minutes of a new
+note appearing, on wake from sleep, and shortly after your own sessions end.
+There's also a **Sync Granola** button front and center.
+
+## Using it
+
+- **Start Listening** before (or during) a call. A small pill flashes when
+  a filler slips out, with a green "clean run" variant when you're on a
+  streak. The pill never steals focus and is hidden from Zoom/Meet/Teams
+  screen shares. The bell icon mutes it for a session.
+- **End Session → Save** — then hit **View Session Report** to see your
+  transcript with every filler highlighted.
+- **Trends** shows your rate over time (Day / 3 Days / Week / Month /
+  3 Months / All), your favorite filler words, and every meeting and
+  session — click any of them for the highlighted transcript.
 
 ## What gets counted
 
-| Category | Examples | Post-hoc (Granola) | Live |
+| Category | Examples | Granola (post-hoc) | Live |
 |---|---|---|---|
 | Vocalized | um, uh, er | ✗ (Granola's ASR strips them) | ✓* |
 | Phrases | you know, i mean, kind of, basically, literally, actually | ✓ | ✓ |
@@ -24,188 +82,121 @@ and the live listener hears only your own mic.
 Heuristics keep legitimate uses out: "I'd **like** to", "looks **like**",
 "what **kind of** car", "**so** far", "very very" are not counted.
 
-\* Apple's on-device recognition may also drop some um/uh's — it's tuned for
+\* Apple's on-device recognition also drops some um/uh's — it's tuned for
 clean dictation. Everything else is caught reliably. The transcriber sits
 behind a small interface, so a verbatim engine (e.g. Deepgram with
-`filler_words=true`) can be plugged in later if um/uh counting matters to you.
+`filler_words=true`) can be plugged in later if um/uh counting matters.
 
-## Setup (macOS)
+## Troubleshooting
+
+- **Counts stay at zero while listening** — Settings → Advanced →
+  **Copy Diagnostics** and read the last lines: "no audio from the mic"
+  means check your input device; "the speech model may be missing" means
+  enable Dictation once (System Settings → Keyboard).
+- **A meeting shows fillers that aren't yours** (or one you didn't attend
+  appears) — set your name(s) and email in Connect Granola, then Sync Now;
+  history re-scores itself.
+- **Denied a permission by accident** — `tccutil reset SpeechRecognition &&
+  tccutil reset Microphone`, then start a session again.
+- **Version for bug reports** — Settings → Advanced (or hover the popover's
+  Quit button).
+
+---
+
+## Python CLI & web dashboard (optional)
+
+The original Python tool remains fully usable — same detector, same
+database schema — and is handy for cron jobs or a browser-based dashboard:
 
 ```bash
 git clone https://github.com/davesuzuki-hiya/filler-killer.git
 cd filler-killer
-./install.sh
+./install.sh                    # installs uv, sets up, runs `fk doctor`
 ```
 
-That's it — the script installs [uv](https://docs.astral.sh/uv) if needed, sets
-up everything, and runs `fk doctor`, which checks each prerequisite (Granola
-access, permissions, on-device speech model) and tells you exactly what to fix
-if anything's missing. Re-run `uv run fk doctor` any time.
-
-### Granola access
-
-Granola **≥ 7.427 encrypts all its local data** with a key only Granola itself
-can read, so filler-killer uses the **official Granola API**:
-
-1. In the Granola desktop app, generate an API key (Settings → API keys).
-   On non-Business plans a workspace admin may need to enable personal API
-   keys first.
-2. Add to your shell profile: `export GRANOLA_API_KEY=grn_...`
-3. `uv run fk doctor` to confirm, then `uv run fk dashboard`.
-
-On older Granola installs with a readable local cache (`cache-v3.json` /
-`cache-v6.json`), no key is needed — the cache is read directly.
-
-### Whose words get counted (`FK_MY_NAME`, `FK_MY_EMAIL`)
-
-In a Granola transcript, **"Me" is whoever captured the note** — their
-microphone. For meetings someone *else* recorded and shared with you, your
-words appear under your display name instead, and counting "Me" would pin the
-note-taker's fillers on you. Set the names Granola labels you with, and your
-Granola account email:
-
 ```bash
-export FK_MY_NAME="Dave Suzuki,Dave"
-export FK_MY_EMAIL="dave.suzuki@hiya.com"
-```
+export GRANOLA_API_KEY=grn_...          # see "Connect Granola" above
+export FK_MY_NAME="Jane Doe,Jane"       # names Granola labels you with
+export FK_MY_EMAIL="jane@company.com"   # your Granola account email
 
-Per meeting:
-- a named speaker matching you (full or first name, case-insensitive) is
-  counted;
-- otherwise "Me" is counted — **unless** the note's owner metadata says
-  someone else captured it, in which case the meeting isn't counted at all
-  (you weren't there, or never spoke; the transcript stays browsable).
-
-The next `fk sync` also re-checks every already-synced meeting from its
-stored transcript and owner metadata, so history heals without refetching.
-Unset, behavior is unchanged: "Me" is always counted.
-
-## Use
-
-```bash
-uv run fk dashboard        # sync Granola + open the dashboard
+uv run fk dashboard        # sync Granola + open the web dashboard
 uv run fk sync             # just sync (cron-able)
-uv run fk listen           # live menu bar counter (macOS)
-uv run fk listen --no-menubar   # live counts in the terminal instead
+uv run fk listen           # live counter in the menu bar
+uv run fk listen --no-menubar   # live counts in the terminal
+uv run fk doctor           # checks every prerequisite and says what to fix
 ```
 
-`fk listen` sessions are saved when you end them (Ctrl-C in terminal, or
-*End Session* in the menu bar) and appear alongside meetings on the dashboard.
+On pre-encryption Granola installs (< 7.427) with a readable local cache,
+no API key is needed — the cache is read directly.
 
-### Permissions (first run of `fk listen`)
+### Speaker attribution details
 
-macOS will prompt for two permissions for your terminal app:
-**Microphone** and **Speech Recognition**. Grant both
-(System Settings → Privacy & Security). Zoom and filler-killer can read the
-mic at the same time.
+Per meeting: a named speaker matching `FK_MY_NAME` (full or first name,
+case-insensitive) is counted; otherwise "Me" is — **unless** the note's
+owner metadata says someone else captured it and you never speak, in which
+case the meeting isn't counted at all (the transcript stays browsable).
+Every sync re-checks stored meetings, so changing these settings heals
+history without refetching. With nothing configured, "Me" is always counted.
 
-Notes:
-- On-device recognition needs the English dictation model. If `fk listen`
-  warns it's falling back to server recognition, enable Dictation once
-  (System Settings → Keyboard → Dictation) to download the model.
-- Denied a prompt by accident? `tccutil reset SpeechRecognition && tccutil
-  reset Microphone`, then run again.
-
-## Installing the Mac app
-
-CI (`.github/workflows/macapp.yml`) builds `FillerKiller-b<run#>` on every
-push. What's inside depends on whether Developer ID signing is configured:
-
-- **Signed + notarized (no terminal needed):** the artifact contains a
-  notarized `FillerKiller-b<run#>.dmg` — open it, drag Filler Killer to
-  Applications, done. To enable this, add five repository secrets
-  (Settings → Secrets and variables → Actions):
-  - `MACOS_CERT_P12` — a base64-encoded Developer ID Application
-    certificate + private key (`base64 -i cert.p12 | pbcopy`); requires an
-    Apple Developer Program membership
-  - `MACOS_CERT_PASSWORD` — the .p12's password
-  - `APPLE_ID` / `APPLE_TEAM_ID` — your Apple ID email and 10-char team ID
-  - `APPLE_APP_PASSWORD` — an app-specific password (appleid.apple.com →
-    Sign-In and Security → App-Specific Passwords) for `notarytool`
-- **Ad-hoc (default, no secrets):** the artifact contains
-  `FillerKiller-app.zip`; unzip and clear quarantine before first launch:
-  `xattr -dr com.apple.quarantine FillerKiller.app`
-
-Granola meetings auto-sync: on launch, every 6 hours in full, plus a cheap
-freshness probe every 15 minutes (and on wake / a few minutes after a live
-session ends) that triggers a sync only when new or updated notes exist.
-
-## Mac verification checklist
-
-The test suite runs anywhere, but four things can only be verified on your Mac:
-
-1. **Granola cache format** — run `uv run fk sync`. If it errors or reports 0
-   meetings, Granola's undocumented cache format has drifted from the parser in
-   `src/fillerkiller/granola/cache_source.py` (fixture:
-   `tests/fixtures/cache-v3.json`) — or your Granola encrypts locally and you
-   need `GRANOLA_API_KEY` (see "Granola access" above; `fk doctor` will say).
-2. **Dashboard sanity** — open a meeting you remember and eyeball the
-   highlighted transcript against reality.
-3. **Live listener** — `uv run fk listen --no-menubar`, say "um, you know,
-   kind of" and watch the counts. First run triggers the permission prompts.
-4. **Menu bar during a real Zoom call** — `uv run fk listen`, confirm the
-   counter ticks while you speak on the call.
-
-## How it works
+## For developers
 
 ```
-Granola cache-v3.json ─┐
-                       ├─> detector engine ─> SQLite ─> FastAPI dashboard
-mic ─> Apple Speech ───┘        (shared)                (localhost:8756)
-        (on-device)
+Granola API / cache ─┐
+                     ├─> detector engine ─> SQLite ─> dashboards
+mic ─> Apple Speech ─┘        (shared)               (web + native)
+      (on-device)
 ```
+
+The Python package (`src/fillerkiller/`) is the **reference implementation
+and cross-language test oracle** for the native app:
 
 - `detector/` — pure-function filler engine shared by both paths
-- `granola/` — official-API source (GRANOLA_API_KEY), local-cache parser for
-  older installs, legacy unofficial-API fallback
-- `store/`, `sync.py` — incremental SQLite persistence
+- `granola/` — official-API source, local-cache parser, legacy fallback,
+  speaker/owner attribution
+- `store/`, `sync.py` — incremental SQLite persistence (re-attribution heals
+  history on every sync)
 - `dashboard/` — FastAPI + Chart.js local web app
-- `realtime/` — Apple Speech adapter, session counter, rumps menu bar
+- `realtime/` — Apple Speech adapter (stability-commit for recognizers that
+  never finalize), session counter, rumps menu bar
 
-## Native macOS app (macapp/)
+The native app (`macapp/`):
 
-The Python tool above is now the **reference implementation and test oracle**
-for Filler Killer.app — a native SwiftUI menu bar app being built for public
-release (see the milestone plan in CLAUDE.md).
-
-- `macapp/FillerKillerKit/` — pure Swift package, builds and tests on Linux:
-  DetectorKit (provably identical to the Python detector via
-  `fixtures/detector/golden.json`), SessionKit (live session counter, trend
-  aggregation), SpeechEngine (SFSpeechRecognizer supervisor; compiled out off
-  macOS).
-- `macapp/FillerKillerMacKit/` — mac-only package: SessionStore (GRDB, same
-  SQLite schema as the Python tool — fk.db imports as a file copy), retro
-  queries, Granola official-API client + sync engine (grn_ key in Keychain).
-- `macapp/FillerKiller/` — app shell: menu bar session controls with live mic
-  level, floating HUD alerts (screen-share-hidden) with the clean-run
-  mechanic, native Trends window (Swift Charts), Granola connect window.
-  Project generated by XcodeGen from `macapp/project.yml`.
-- CI (`.github/workflows/macapp.yml`) builds/tests on Linux + macOS and
-  uploads an ad-hoc-signed `FillerKiller-b<run#>` artifact per run.
-
-### On-Mac verification checklist (current milestones)
-
-1. **Live counting (M2)** — Start Session, speak "um, so, you know…": bar
-   glyph moves with your voice, count ticks; diagnostics lines visible in the
-   menu while listening.
-2. **Persistence (M3)** — End & Save, quit, reopen: session survives; first
-   launch imported the Python tool's fk.db (meeting count in idle menu).
-3. **HUD (M4)** — pill flashes on fillers without stealing typing focus
-   (type in a doc while it fires); green clean-run variant at 50+ clean
-   words; on a Zoom/Meet screen share the OTHER side must not see the pill;
-   Mute Alerts silences flashes while counting continues.
-4. **Trends (M5)** — Open Trends: numbers must match the Python dashboard on
-   the same database; range picker; drill into a transcript and check
-   highlighted fillers.
-5. **Granola (M6)** — Connect Granola with a grn_ key: validation, first
-   sync counts match `fk sync`, live-only mode (no key) still works.
-
-## Development
+- `FillerKillerKit/` — pure Swift, builds and tests on Linux: DetectorKit
+  (provably identical to the Python detector via `fixtures/*/golden.json`),
+  SessionKit (counters, trend aggregation), SpeechEngine (SFSpeechRecognizer
+  supervisor + PartialStabilizer; compiled out off-macOS)
+- `FillerKillerMacKit/` — mac-only: SessionStore (GRDB, same SQLite schema —
+  the Python tool's fk.db imports as a file copy), Retro queries, Granola
+  client + sync engine (key in Keychain)
+- `FillerKiller/` — app shell (menu bar, HUD, Trends, onboarding), generated
+  by XcodeGen from `macapp/project.yml`
 
 ```bash
-uv pip install -e . --group dev
-uv run pytest
+uv pip install -e . --group dev && uv run pytest      # Python suite
+swift test --package-path macapp/FillerKillerKit      # cross-platform kit
+swift test --package-path macapp/FillerKillerMacKit   # mac-only kit
+python3 tools/gen_golden.py                           # regenerate oracle fixtures (review the diff!)
 ```
 
-Everything Mac-specific is a thin adapter; all logic is tested with fixtures
-on any OS.
+CI (`.github/workflows/macapp.yml`) tests both packages on Linux + macOS and
+uploads a `FillerKiller-b<run#>` artifact per run. With Developer ID secrets
+configured the artifact is a **notarized DMG** (no-terminal install);
+without them it's an ad-hoc zip. Secrets (repo Settings → Secrets and
+variables → Actions): `MACOS_CERT_P12` (base64 .p12, needs an Apple
+Developer Program membership), `MACOS_CERT_PASSWORD`, `APPLE_ID`,
+`APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` (app-specific password for
+`notarytool`).
+
+### On-Mac verification checklist
+
+1. **Live counting** — Start Session, speak "so, you know, kind of…" and
+   pause: count ticks ~2s after each pause.
+2. **Persistence** — End & Save, quit, reopen: session survives; View
+   Session Report opens the highlighted transcript.
+3. **HUD** — pill flashes without stealing typing focus; green clean-run at
+   50+ clean words; the far side of a screen share must not see it.
+4. **Trends** — numbers match the Python dashboard on the same database;
+   range picker; transcript drill-down highlights.
+5. **Granola** — connect with a grn_ key: first sync matches `fk sync`;
+   meetings captured by others attribute to your named lines; meetings you
+   didn't speak in are not counted.
