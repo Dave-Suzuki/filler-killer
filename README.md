@@ -17,9 +17,10 @@ you lean on, so your next meeting has fewer of them. It works two ways:
 
 ### 1. Install the app
 
-Download the latest `FillerKiller-b<number>` from this repo's
-[Actions page](../../actions/workflows/macapp.yml) (pick the newest green
-run, artifact at the bottom) — or ask Dave for the current build.
+Download the newest build from the
+[**Releases page**](../../releases/latest). (In-progress branch builds are
+also available as artifacts on the
+[Actions page](../../actions/workflows/macapp.yml).)
 
 - If it contains **`FillerKiller-b<number>.dmg`**: open it, drag
   Filler Killer to Applications, launch it. Done.

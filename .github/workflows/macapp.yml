@@ -20,6 +20,8 @@ jobs:
 
   mac-build:
     runs-on: macos-15
+    permissions:
+      contents: write # publish Releases from main builds
     steps:
       - uses: actions/checkout@v4
       - run: brew install xcodegen
@@ -99,3 +101,18 @@ jobs:
           name: FillerKiller-b${{ github.run_number }}
           path: macapp/build/Release/dist/*
           retention-days: 14
+      # Every main build becomes a Release — a stable, no-login-maze download
+      # link for colleagues (repo Releases page → latest).
+      - name: Publish release (main only)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          VERSION=$(sed -n 's/.*MARKETING_VERSION: "\(.*\)"/\1/p' macapp/project.yml | head -1)
+          TAG="v${VERSION}-b${RUN_NUMBER}"
+          gh release create "$TAG" macapp/build/Release/dist/* \
+            --title "Filler Killer ${TAG}" \
+            --generate-notes \
+            --latest
