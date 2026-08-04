@@ -105,6 +105,7 @@ final class AppModel: ObservableObject {
 
     @Published var granolaConnected = GranolaKeychain.load() != nil
     @Published var granolaStatus = ""
+    @Published var syncing = false
 
     // Post-session report: the just-saved session's retro id ("l:<id>"),
     // and a one-shot navigation request the Trends window consumes.
@@ -118,7 +119,8 @@ final class AppModel: ObservableObject {
     private var recorder: LiveSessionRecorder?
     private var events: [String] = [] // diagnostics: Settings-only, never UI
     private var granolaTimer: Timer?
-    private var syncing = false
+    private var granolaProbeTimer: Timer?
+    private var wakeObserver: NSObjectProtocol?
     private var cleanRunWords = 0
     private var firedCleanThresholds: Set<Int> = []
     private var onboardingWindow: NSWindow?
@@ -357,6 +359,11 @@ final class AppModel: ObservableObject {
         }
         recorder = nil
         state = .idle
+        // A live session usually parallels a meeting whose Granola note lands
+        // a few minutes later — probe soon instead of waiting for the timer.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 180) { [weak self] in
+            Task { @MainActor in self?.probeGranolaNow() }
+        }
     }
 
     /// "View Report" after a saved session: ask the Trends window to open
@@ -433,6 +440,39 @@ final class AppModel: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor in self?.syncGranolaNow() }
         }
+        // New notes land minutes after meetings end — a cheap freshness probe
+        // (one tiny API page) every 15 minutes keeps the dashboard current
+        // without waiting for the 6-hour full sync.
+        granolaProbeTimer?.invalidate()
+        granolaProbeTimer = Timer.scheduledTimer(
+            withTimeInterval: 15 * 60, repeats: true
+        ) { [weak self] _ in
+            Task { @MainActor in self?.probeGranolaNow() }
+        }
+        if wakeObserver == nil {
+            wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in self?.probeGranolaNow() }
+            }
+        }
+    }
+
+    /// Sync only if the newest notes differ from the store — cheap enough to
+    /// run often; a full sync fires only when there's actually something new.
+    func probeGranolaNow() {
+        guard granolaConnected, !syncing, let store,
+              let key = GranolaKeychain.load() else { return }
+        let engine = GranolaSyncEngine(
+            store: store, client: GranolaClient(apiKey: key),
+            myNames: granolaSelfNames, myEmail: granolaSelfEmail
+        )
+        Task {
+            if (try? await engine.needsSync()) == true {
+                self.logEvent("granola probe: new notes, syncing")
+                self.syncGranolaNow()
+            }
+        }
     }
 
     func syncGranolaNow() {
@@ -479,6 +519,7 @@ final class AppModel: ObservableObject {
         GranolaKeychain.delete()
         granolaConnected = false
         granolaTimer?.invalidate()
+        granolaProbeTimer?.invalidate()
         granolaStatus = ""
     }
 }

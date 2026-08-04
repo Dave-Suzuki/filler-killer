@@ -106,6 +106,30 @@ Notes:
 - Denied a prompt by accident? `tccutil reset SpeechRecognition && tccutil
   reset Microphone`, then run again.
 
+## Installing the Mac app
+
+CI (`.github/workflows/macapp.yml`) builds `FillerKiller-b<run#>` on every
+push. What's inside depends on whether Developer ID signing is configured:
+
+- **Signed + notarized (no terminal needed):** the artifact contains a
+  notarized `FillerKiller-b<run#>.dmg` — open it, drag Filler Killer to
+  Applications, done. To enable this, add five repository secrets
+  (Settings → Secrets and variables → Actions):
+  - `MACOS_CERT_P12` — a base64-encoded Developer ID Application
+    certificate + private key (`base64 -i cert.p12 | pbcopy`); requires an
+    Apple Developer Program membership
+  - `MACOS_CERT_PASSWORD` — the .p12's password
+  - `APPLE_ID` / `APPLE_TEAM_ID` — your Apple ID email and 10-char team ID
+  - `APPLE_APP_PASSWORD` — an app-specific password (appleid.apple.com →
+    Sign-In and Security → App-Specific Passwords) for `notarytool`
+- **Ad-hoc (default, no secrets):** the artifact contains
+  `FillerKiller-app.zip`; unzip and clear quarantine before first launch:
+  `xattr -dr com.apple.quarantine FillerKiller.app`
+
+Granola meetings auto-sync: on launch, every 6 hours in full, plus a cheap
+freshness probe every 15 minutes (and on wake / a few minutes after a live
+session ends) that triggers a sync only when new or updated notes exist.
+
 ## Mac verification checklist
 
 The test suite runs anywhere, but four things can only be verified on your Mac:

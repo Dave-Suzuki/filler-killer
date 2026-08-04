@@ -24,6 +24,9 @@ struct PopoverView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if model.granolaConnected {
+                granolaRow
+            }
             Divider()
             footer
         }
@@ -204,6 +207,27 @@ struct PopoverView: View {
                     .buttonStyle(.plain)
                     .help("Silence the on-screen pill for this session")
                 }
+            }
+        }
+    }
+
+    private var granolaRow: some View {
+        HStack(spacing: 8) {
+            Button {
+                model.syncGranolaNow()
+            } label: {
+                Label(model.syncing ? "Syncing…" : "Sync Granola",
+                      systemImage: "arrow.triangle.2.circlepath")
+            }
+            .controlSize(.small)
+            .disabled(model.syncing)
+            Spacer()
+            if !model.granolaStatus.isEmpty {
+                Text(model.granolaStatus)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
         }
     }

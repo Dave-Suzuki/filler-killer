@@ -2,8 +2,11 @@
 
 ## Delivering Mac app builds to Dave
 
-EVERY time a new build is announced, include the complete install command
-block — never just a link or an artifact name. The block (artifact name is
+If the artifact contains a `.dmg` (Developer ID secrets configured in CI),
+installation is: download, open the DMG, drag to Applications — send that,
+not a command block. For ad-hoc builds (zip artifact), EVERY time a new
+build is announced, include the complete install command block — never just
+a link or an artifact name. The block (artifact name is
 `FillerKiller-b<run#>`, download from the Actions run page first):
 
 ```bash

@@ -32,6 +32,14 @@ public struct GranolaSyncStats: Sendable, Equatable {
 public protocol GranolaAPI: Sendable {
     func listNotes() async throws -> [GranolaNoteStub]
     func noteDetail(id: String) async throws -> GranolaNoteDetail
+    /// The newest few note stubs, cheaply. Default falls back to listNotes().
+    func latestStubs(limit: Int) async throws -> [GranolaNoteStub]
+}
+
+public extension GranolaAPI {
+    func latestStubs(limit: Int) async throws -> [GranolaNoteStub] {
+        Array(try await listNotes().prefix(limit))
+    }
 }
 
 extension GranolaClient: GranolaAPI {}
@@ -50,6 +58,24 @@ public final class GranolaSyncEngine {
         self.client = client
         self.myNames = myNames
         self.myEmail = myEmail
+    }
+
+    /// Freshness probe: compares one small page of the newest note stubs
+    /// against the store. True when anything is new or updated — the caller
+    /// should then run a full sync(). Cheap enough to poll every few minutes.
+    public func needsSync(probeLimit: Int = 10) async throws -> Bool {
+        let known: [String: String?] = try await store.pool.read { db in
+            var map: [String: String?] = [:]
+            for row in try Row.fetchAll(db, sql: "SELECT id, updated_at FROM meetings") {
+                map[row["id"] as String] = row["updated_at"] as String?
+            }
+            return map
+        }
+        for stub in try await client.latestStubs(limit: probeLimit) {
+            guard let existing = known[stub.id] else { return true }
+            if existing != stub.updatedAt { return true }
+        }
+        return false
     }
 
     public func sync() async throws -> GranolaSyncStats {

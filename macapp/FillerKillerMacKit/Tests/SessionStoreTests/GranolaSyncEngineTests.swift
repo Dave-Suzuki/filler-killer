@@ -137,6 +137,45 @@ final class GranolaSyncEngineTests: XCTestCase {
                                                 reattributed: 0))
     }
 
+    func testNeedsSyncProbe() async throws {
+        let store = try tempStore()
+        let transcript = try segments("""
+        [{"text": "kind of fine", "speaker": {"source": "microphone", "attribution": "me"}}]
+        """)
+        let v1 = StubAPI(
+            stubs: [GranolaNoteStub(id: "n1", title: "A", createdAt: nil, updatedAt: "v1")],
+            details: ["n1": GranolaNoteDetail(id: "n1", title: "A", createdAt: nil,
+                                              updatedAt: "v1", transcript: transcript)]
+        )
+        let engine = GranolaSyncEngine(store: store, client: v1)
+
+        // Empty store: the note is unknown.
+        let before = try await engine.needsSync()
+        XCTAssertTrue(before)
+
+        // After a sync everything matches.
+        _ = try await engine.sync()
+        let after = try await engine.needsSync()
+        XCTAssertFalse(after)
+
+        // A bumped updated_at is detected.
+        let v2 = StubAPI(
+            stubs: [GranolaNoteStub(id: "n1", title: "A", createdAt: nil, updatedAt: "v2")],
+            details: [:]
+        )
+        let changed = try await GranolaSyncEngine(store: store, client: v2).needsSync()
+        XCTAssertTrue(changed)
+
+        // A brand-new note is detected.
+        let v3 = StubAPI(
+            stubs: [GranolaNoteStub(id: "n1", title: "A", createdAt: nil, updatedAt: "v1"),
+                    GranolaNoteStub(id: "n2", title: "B", createdAt: nil, updatedAt: "v1")],
+            details: [:]
+        )
+        let grown = try await GranolaSyncEngine(store: store, client: v3).needsSync()
+        XCTAssertTrue(grown)
+    }
+
     func testForeignNoteWithoutMyVoiceIsNotCounted() async throws {
         let store = try tempStore()
         // Rhonda's note for a meeting Dave didn't attend: her mic is "Me",

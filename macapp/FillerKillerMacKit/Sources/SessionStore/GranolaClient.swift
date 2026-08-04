@@ -185,6 +185,15 @@ public struct GranolaClient: Sendable {
         return page.notes.count
     }
 
+    /// One small page of the newest note stubs — the freshness probe behind
+    /// auto-sync. Much cheaper than listNotes(), which paginates everything.
+    public func latestStubs(limit: Int) async throws -> [GranolaNoteStub] {
+        let page: GranolaNotesPage = try await get(
+            "notes", query: [URLQueryItem(name: "limit", value: String(limit))]
+        )
+        return page.notes
+    }
+
     public func listNotes() async throws -> [GranolaNoteStub] {
         var notes: [GranolaNoteStub] = []
         var cursor: String?
