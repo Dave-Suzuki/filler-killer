@@ -27,8 +27,11 @@ you lean on, so your next meeting has fewer of them. It works two ways:
   conflict, the pill is invisible to screen shares, and the menu bar count
   is hidden by default while listening so nobody sees your tally.
 - **Honest controls** — Pause genuinely stops the microphone (no "paused
-  but still listening"), and your data is one local SQLite file with a
-  delete-everything button in Settings.
+  but still listening"), and Settings has a delete-everything button.
+- **Your data stays yours** — everything lives in one local SQLite file on
+  your Mac: private (nothing to upload, no vendor holding your transcripts)
+  and portable (copy it to a new machine, query it with any SQLite tool,
+  or open it with the Python CLI — the app and CLI share the same schema).
 - **No account, no subscription, no cloud** — recognition runs on Apple's
   on-device engine; the only network call is fetching your own Granola
   notes, if you connect them.
