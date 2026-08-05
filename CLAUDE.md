@@ -2,19 +2,35 @@
 
 ## Delivering Mac app builds to Dave
 
-If the artifact contains a `.dmg` (Developer ID secrets configured in CI),
+If the build contains a `.dmg` (Developer ID secrets configured in CI),
 installation is: download, open the DMG, drag to Applications — send that,
-not a command block. For ad-hoc builds (zip artifact), EVERY time a new
-build is announced, include the complete install command block — never just
-a link or an artifact name. The block (artifact name is
-`FillerKiller-b<run#>`, download from the Actions run page first):
+not a command block. For ad-hoc zip builds, EVERY time a new build is
+announced, include the complete install command block — never just a link.
+HARD RULE: never `rm` a filename that a later line unzips — the b45 incident
+deleted Dave's fresh download because the cleanup line was written for a
+different channel's file naming.
+
+Release install (primary; asset is `FillerKiller-b<run#>.zip`, downloaded
+from the release page):
 
 ```bash
 pkill -x FillerKiller 2>/dev/null || true
 cd ~/Downloads
-rm -rf FillerKiller.app FillerKiller-app.zip README-INSTALL.txt
+rm -rf FillerKiller.app README-INSTALL.txt
 unzip -o "$(ls -t FillerKiller-b*.zip | head -1)" && rm -f FillerKiller-b*.zip
-unzip -o FillerKiller-app.zip
+xattr -dr com.apple.quarantine FillerKiller.app
+open FillerKiller.app
+```
+
+Dev build from an Actions artifact (download is `FillerKiller-b<run#>-dev.zip`,
+which wraps the versioned zip once — hence two unzips):
+
+```bash
+pkill -x FillerKiller 2>/dev/null || true
+cd ~/Downloads
+rm -rf FillerKiller.app README-INSTALL.txt
+unzip -o "$(ls -t FillerKiller-b*-dev.zip | head -1)" && rm -f FillerKiller-b*-dev.zip
+unzip -o "$(ls -t FillerKiller-b*.zip | head -1)" && rm -f FillerKiller-b*.zip
 xattr -dr com.apple.quarantine FillerKiller.app
 open FillerKiller.app
 ```

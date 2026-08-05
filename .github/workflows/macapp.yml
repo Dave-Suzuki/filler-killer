@@ -67,8 +67,8 @@ jobs:
                xattr -dr com.apple.quarantine FillerKiller.app
           3. Open FillerKiller.app — look for the waveform icon in the menu bar.
           EOF
-            ditto -c -k --keepParent FillerKiller.app dist/FillerKiller-app.zip
-            zip -q dist/FillerKiller-app.zip README-INSTALL.txt
+            ditto -c -k --keepParent FillerKiller.app "dist/FillerKiller-b${RUN_NUMBER}.zip"
+            zip -q "dist/FillerKiller-b${RUN_NUMBER}.zip" README-INSTALL.txt
             exit 0
           fi
           KEYCHAIN=fk-ci.keychain
@@ -97,8 +97,9 @@ jobs:
           xcrun stapler staple "dist/FillerKiller-b${RUN_NUMBER}.dmg"
       - uses: actions/upload-artifact@v4
         with:
-          # Unique per run so repeated downloads never collide as "(2).zip".
-          name: FillerKiller-b${{ github.run_number }}
+          # -dev suffix: the artifact wrapper zip must not share a name with
+          # the versioned zip inside it, or the two-step unzip clobbers itself.
+          name: FillerKiller-b${{ github.run_number }}-dev
           path: macapp/build/Release/dist/*
           retention-days: 14
       # Every main build becomes a Release — a stable, no-login-maze download

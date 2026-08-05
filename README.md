@@ -47,9 +47,9 @@ also available as artifacts on the
 
 - If it contains **`FillerKiller-b<number>.dmg`**: open it, drag
   Filler Killer to Applications, launch it. Done.
-- If it contains **`FillerKiller-app.zip`** (unsigned dev build): unzip,
-  then clear macOS quarantine once before first launch — paste this in
-  Terminal from the folder holding the app:
+- If it contains **`FillerKiller-b<number>.zip`** (unsigned dev build):
+  unzip, then clear macOS quarantine once before first launch — paste this
+  in Terminal from the folder holding the app:
 
   ```bash
   xattr -dr com.apple.quarantine FillerKiller.app && open FillerKiller.app
