@@ -36,16 +36,22 @@ struct FillerKillerApp: App {
     }
 }
 
-/// Menu bar label: template SF Symbols, never judgment colors, count hidden
-/// by default while listening (it's visible to screen shares).
+/// Menu bar label: template images, never judgment colors, count hidden
+/// by default while listening (it's visible to screen shares). Idle shows
+/// the brand glyph (the app icon's slashed speech bubble as a template
+/// image); listening switches to the live waveform, which doubles as a
+/// mic-level meter.
 struct BarLabel: View {
     @ObservedObject var model: AppModel
 
     var body: some View {
         switch model.state {
         case .idle:
-            Image(systemName: model.onDeviceBlocked
-                ? "waveform.badge.exclamationmark" : "waveform")
+            if model.onDeviceBlocked {
+                Image(systemName: "waveform.badge.exclamationmark")
+            } else {
+                Image("MenuBarIcon")
+            }
         case .paused:
             Image(systemName: "waveform.slash")
         case .listening:

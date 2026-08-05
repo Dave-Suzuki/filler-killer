@@ -34,7 +34,8 @@ struct PopoverView: View {
 
     private var header: some View {
         HStack {
-            Image(systemName: "waveform")
+            Image("MenuBarIcon")
+                .renderingMode(.template)
                 .foregroundStyle(Color.accentColor)
             Text("Filler Killer")
                 .font(.system(size: 13, weight: .semibold))
