@@ -212,7 +212,9 @@ final class AhaDemo: ObservableObject {
         lastTerms = []
         do {
             let transcriber = try SpeechTranscriber(allowServer: model.allowServerRecognition)
-            transcriber.onFinal = { [weak self, weak model] text in
+            // Voice stats are ignored here: the demo counts whoever reads
+            // the sentence.
+            transcriber.onFinal = { [weak self, weak model] text, _ in
                 DispatchQueue.main.async {
                     guard let self else { return }
                     let hits = self.counter.addFinal(text)

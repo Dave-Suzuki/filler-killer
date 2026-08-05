@@ -36,6 +36,36 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Section("My voice") {
+                Toggle("Only count my voice", isOn: $model.onlyMyVoice)
+                    .disabled(model.myVoiceBand == nil)
+                HStack {
+                    Button(model.calibrating
+                        ? "Listening…"
+                        : (model.myVoiceBand == nil ? "Calibrate…" : "Recalibrate")) {
+                        model.startCalibration()
+                    }
+                    .disabled(model.calibrating || model.state != .idle)
+                    if let band = model.myVoiceBand {
+                        Text("Your range: \(Int(band.lowF0))–\(Int(band.highF0)) Hz")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if !model.calibrationStatus.isEmpty {
+                    Text(model.calibrationStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Text("Calibration reads your pitch for ten seconds; sessions "
+                    + "then skip speech that sits outside your range. Works "
+                    + "best when the other voices around you are higher or "
+                    + "lower than yours — a similar-pitch voice can still be "
+                    + "counted. Speaker audio is already filtered out by echo "
+                    + "cancellation either way.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             Section("General") {
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, enable in

@@ -53,9 +53,11 @@ public struct OnDeviceUnavailableError: LocalizedError {
 }
 
 public final class SpeechTranscriber: @unchecked Sendable {
-    /// Called with each finalized utterance. Delivered on the main queue
-    /// (SFSpeechRecognizer's default handler queue).
-    public var onFinal: ((String) -> Void)?
+    /// Called with each finalized utterance, plus that segment's voice-pitch
+    /// stats (nil when too little voiced audio to judge — the caller's gate
+    /// fails open). Delivered on the main queue (SFSpeechRecognizer's
+    /// default handler queue).
+    public var onFinal: ((String, SegmentVoice?) -> Void)?
     /// Terse diagnostic events ("audio flowing", "heard: ...", errors,
     /// restarts) delivered on the main queue — shown in the menu so field
     /// failures are debuggable without a debugger.
@@ -86,6 +88,18 @@ public final class SpeechTranscriber: @unchecked Sendable {
     private var restartCount = 0
     private var sawAnyResult = false
     private var bufferCount = 0
+    // Voice-pitch stats for the "only count my voice" gate. Guarded by its
+    // own lock: `lock` is taken on the audio thread for the request swap and
+    // must stay cheap, while pitch consumers (main queue) compute a median.
+    private let pitchLock = NSLock()
+    private var pitch = PitchEstimator(sampleRate: 48000)
+
+    /// Consume the pitch stats accumulated since the previous segment commit.
+    private func takeVoice() -> SegmentVoice? {
+        pitchLock.lock()
+        defer { pitchLock.unlock() }
+        return pitch.takeSegmentVoice()
+    }
 
     private func emit(_ event: String) {
         DispatchQueue.main.async { [weak self] in
@@ -115,16 +129,45 @@ public final class SpeechTranscriber: @unchecked Sendable {
 
     public func start() throws {
         running = true
+        // Apple's voice processing: echo cancellation subtracts what the Mac
+        // is PLAYING from what the mic hears, so remote participants coming
+        // out of the speakers mostly never reach recognition — and the app
+        // becomes eligible for the user-selectable Voice Isolation mic mode
+        // (Control Center). Must happen before the tap: it changes the input
+        // format. Fail-open: a session must never be blocked on it.
+        do {
+            try engine.inputNode.setVoiceProcessingEnabled(true)
+            engine.inputNode.voiceProcessingOtherAudioDuckingConfiguration =
+                AVAudioVoiceProcessingOtherAudioDuckingConfiguration(
+                    enableAdvancedDucking: false, duckingLevel: .min
+                )
+            emit("echo cancellation on (speaker audio subtracted from mic)")
+        } catch {
+            emit("echo cancellation unavailable: \(error.localizedDescription.prefix(60))")
+        }
         installTap()
         startRequest()
         engine.prepare()
         do {
             try engine.start()
         } catch {
-            running = false
-            throw SpeechEngineError(message:
-                "Could not start the microphone: \(error.localizedDescription). "
-                + "Check the Microphone permission in System Settings → Privacy & Security.")
+            if engine.inputNode.isVoiceProcessingEnabled {
+                // Some device/OS combinations reject the voice-processing
+                // unit at start; retry plain rather than failing the session.
+                emit("mic start failed with echo cancellation on; retrying without")
+                engine.inputNode.removeTap(onBus: 0)
+                try? engine.inputNode.setVoiceProcessingEnabled(false)
+                installTap()
+                engine.prepare()
+            }
+            do {
+                try engine.start()
+            } catch {
+                running = false
+                throw SpeechEngineError(message:
+                    "Could not start the microphone: \(error.localizedDescription). "
+                    + "Check the Microphone permission in System Settings → Privacy & Security.")
+            }
         }
         emit("engine running (\(onDevice ? "on-device" : "server") recognition)")
         // Some recognizer configurations never finalize on their own; commit
@@ -153,13 +196,13 @@ public final class SpeechTranscriber: @unchecked Sendable {
         }
     }
 
-    /// Stops the engine and returns any pending, un-finalized speech. The
-    /// pending text is RETURNED rather than delivered via onFinal: callers
-    /// tear their session down right after stop(), and an async onFinal
-    /// would land after teardown and be dropped — count the return value
-    /// synchronously instead.
+    /// Stops the engine and returns any pending, un-finalized speech (with
+    /// its voice stats). The pending text is RETURNED rather than delivered
+    /// via onFinal: callers tear their session down right after stop(), and
+    /// an async onFinal would land after teardown and be dropped — count the
+    /// return value synchronously instead.
     @discardableResult
-    public func stop() -> String? {
+    public func stop() -> (text: String, voice: SegmentVoice?)? {
         running = false
         stabilityTimer?.cancel()
         stabilityTimer = nil
@@ -180,7 +223,7 @@ public final class SpeechTranscriber: @unchecked Sendable {
         engine.stop()
         req?.endAudio()
         tsk?.cancel()
-        return pending.isEmpty ? nil : pending
+        return pending.isEmpty ? nil : (pending, takeVoice())
     }
 
     // MARK: - Internals
@@ -188,8 +231,13 @@ public final class SpeechTranscriber: @unchecked Sendable {
     private func installTap() {
         let node = engine.inputNode
         let format = node.outputFormat(forBus: 0) // never hardcode a sample rate
-        // Realtime audio thread: append the buffer, nothing else.
         emit("mic format: \(Int(format.sampleRate)) Hz, \(format.channelCount) ch")
+        pitchLock.lock()
+        pitch = PitchEstimator(sampleRate: format.sampleRate)
+        pitchLock.unlock()
+        // Realtime audio thread: append the buffer plus bounded, allocation-
+        // free bookkeeping (level meter, pitch accumulation — ~0.1 ms per
+        // 50 ms window).
         node.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             guard let self else { return }
             if !self.audioFlowing {
@@ -206,6 +254,11 @@ public final class SpeechTranscriber: @unchecked Sendable {
                     let level = min(1.0, rms * 12)
                     DispatchQueue.main.async { [weak self] in self?.onLevel?(level) }
                 }
+            }
+            if let data = buffer.floatChannelData?[0] {
+                self.pitchLock.lock()
+                self.pitch.process(data, count: Int(buffer.frameLength))
+                self.pitchLock.unlock()
             }
             self.lock.lock()
             let req = self.request
@@ -253,12 +306,15 @@ public final class SpeechTranscriber: @unchecked Sendable {
                 lastPartial = ""
                 stabilizer.reset()
                 lock.unlock()
+                // Consume pitch stats at EVERY segment boundary — an empty
+                // final's audio must not bleed into the next segment's stats.
+                let voice = takeVoice()
                 if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     consecutiveEmptyRestarts += 1
                 } else {
                     consecutiveEmptyRestarts = 0
                     emit("final: …\(text.suffix(36))")
-                    onFinal?(text)
+                    onFinal?(text, voice)
                 }
                 restart()
                 return
@@ -281,11 +337,12 @@ public final class SpeechTranscriber: @unchecked Sendable {
             lastPartial = ""
             stabilizer.reset()
             lock.unlock()
+            let voice = takeVoice()
             if pending.isEmpty {
                 consecutiveEmptyRestarts += 1
             } else {
                 consecutiveEmptyRestarts = 0
-                onFinal?(pending)
+                onFinal?(pending, voice)
             }
             restart()
         }
@@ -304,7 +361,7 @@ public final class SpeechTranscriber: @unchecked Sendable {
         guard let stable else { return }
         consecutiveEmptyRestarts = 0
         emit("final (stable after pause): …\(stable.suffix(36))")
-        onFinal?(stable)
+        onFinal?(stable, takeVoice())
         restart()
     }
 
@@ -342,7 +399,7 @@ public final class SpeechTranscriber: @unchecked Sendable {
         stabilizer.reset()
         lock.unlock()
         if !pending.isEmpty {
-            onFinal?(pending)
+            onFinal?(pending, takeVoice())
         }
         engine.inputNode.removeTap(onBus: 0)
         installTap()
@@ -351,6 +408,50 @@ public final class SpeechTranscriber: @unchecked Sendable {
             try? engine.start()
         }
         restart()
+    }
+}
+
+/// Ten-second mic capture that collects raw voiced-frame F0s for "only count
+/// my voice" calibration. No recognition — just the engine, the same voice
+/// processing a real session uses (so the calibrated band matches session
+/// conditions), and the pitch estimator.
+public final class VoiceCalibrator: @unchecked Sendable {
+    private let engine = AVAudioEngine()
+    private let lock = NSLock()
+    private var pitch = PitchEstimator(sampleRate: 48000)
+
+    public init() {}
+
+    public func start() throws {
+        try? engine.inputNode.setVoiceProcessingEnabled(true)
+        let node = engine.inputNode
+        let format = node.outputFormat(forBus: 0)
+        lock.lock()
+        pitch = PitchEstimator(sampleRate: format.sampleRate)
+        lock.unlock()
+        node.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+            guard let self, let data = buffer.floatChannelData?[0] else { return }
+            self.lock.lock()
+            self.pitch.process(data, count: Int(buffer.frameLength))
+            self.lock.unlock()
+        }
+        engine.prepare()
+        do {
+            try engine.start()
+        } catch {
+            throw SpeechEngineError(message:
+                "Could not start the microphone: \(error.localizedDescription). "
+                + "Check the Microphone permission in System Settings → Privacy & Security.")
+        }
+    }
+
+    /// Stop capturing and return every voiced-frame F0 heard (Hz).
+    public func stop() -> [Double] {
+        engine.inputNode.removeTap(onBus: 0)
+        engine.stop()
+        lock.lock()
+        defer { lock.unlock() }
+        return pitch.takeF0s()
     }
 }
 

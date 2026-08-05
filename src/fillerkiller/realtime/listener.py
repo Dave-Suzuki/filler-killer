@@ -16,6 +16,12 @@ Newer macOS builds add a third case: on-device recognition can amend the
 partial forever without EVER finalizing or erroring, so a timer commits any
 partial that has stopped changing for ~1.2s (see stabilizer.py) and
 restarts the request.
+
+Intentional divergence from the Mac app (M8): the app's SpeechTranscriber
+additionally enables Apple voice processing (echo cancellation) and runs a
+per-segment pitch gate ("only count my voice", PitchEstimator.swift). This
+legacy CLI listener counts everything the mic hears — it has no speaker
+filtering and no plans for it.
 """
 
 import sys

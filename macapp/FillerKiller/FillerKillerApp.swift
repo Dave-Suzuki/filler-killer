@@ -90,6 +90,11 @@ final class AppModel: ObservableObject {
     @AppStorage("showCountWhileListening") var showCountWhileListening = false
     @AppStorage("allowServerRecognition") var allowServerRecognition = false
     @AppStorage("onboarded") var onboarded = false
+    // "Only count my voice": segments whose median pitch falls outside the
+    // calibrated band are dropped before counting. Off until calibrated.
+    @AppStorage("onlyMyVoice") var onlyMyVoice = false
+    @AppStorage("myVoiceF0Low") var myVoiceF0Low = 0.0
+    @AppStorage("myVoiceF0High") var myVoiceF0High = 0.0
     // Names Granola may label the user with in meetings captured by someone
     // else (comma-separated). Empty falls back to the macOS account name.
     @AppStorage("granolaMyNames") var granolaMyNames = ""
@@ -108,6 +113,14 @@ final class AppModel: ObservableObject {
         let trimmed = granolaMyEmail.trimmingCharacters(in: .whitespaces)
         return trimmed.isEmpty ? nil : trimmed
     }
+
+    var myVoiceBand: VoiceBand? {
+        guard myVoiceF0Low > 0, myVoiceF0High > myVoiceF0Low else { return nil }
+        return VoiceBand(lowF0: myVoiceF0Low, highF0: myVoiceF0High)
+    }
+
+    @Published var calibrating = false
+    @Published var calibrationStatus = ""
 
     @Published var granolaConnected = GranolaKeychain.load() != nil
     @Published var granolaStatus = ""
@@ -130,7 +143,10 @@ final class AppModel: ObservableObject {
     private var cleanRunWords = 0
     private var firedCleanThresholds: Set<Int> = []
     private var onboardingWindow: NSWindow?
+    private var calibrator: VoiceCalibrator?
+    private var skippedForeignSegments = 0
     private static let cleanThresholds = [50, 100, 250, 500]
+    private static let calibrationSeconds = 10
 
     var sessionStore: SessionStore? { store }
 
@@ -215,6 +231,7 @@ final class AppModel: ObservableObject {
         cleanRunWords = 0
         bestCleanRun = 0
         firedCleanThresholds = []
+        skippedForeignSegments = 0
         events = []
         if let store {
             let recorder = LiveSessionRecorder(store: store)
@@ -236,8 +253,8 @@ final class AppModel: ObservableObject {
     private func startEngine() -> Bool {
         do {
             let transcriber = try SpeechTranscriber(allowServer: allowServerRecognition)
-            transcriber.onFinal = { [weak self] text in
-                DispatchQueue.main.async { self?.ingest(text) }
+            transcriber.onFinal = { [weak self] text, voice in
+                DispatchQueue.main.async { self?.ingest(text, voice: voice) }
             }
             transcriber.onEvent = { [weak self] event in
                 DispatchQueue.main.async { self?.logEvent(event) }
@@ -275,8 +292,18 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func ingest(_ text: String) {
+    private func ingest(_ text: String, voice: SegmentVoice? = nil) {
         guard state == .listening else { return }
+        // "Only count my voice": a segment confidently pitched outside the
+        // calibrated band is someone else — drop it entirely (not stored,
+        // not counted). Ambiguous segments are counted; the gate fails open.
+        if onlyMyVoice, let band = myVoiceBand, band.shouldSkip(voice) {
+            skippedForeignSegments += 1
+            let f0 = voice.map { Int($0.medianF0) } ?? 0
+            logEvent("skipped segment (not your voice, F0 \(f0) Hz, "
+                + "#\(skippedForeignSegments)): …\(text.suffix(24))")
+            return
+        }
         let wordsBefore = counter.wordCount
         let newHits = counter.addFinal(text)
         let segmentIdx = counter.segments.count - 1
@@ -317,7 +344,7 @@ final class AppModel: ObservableObject {
             // stop() returns un-finalized speech; count it before pausing so
             // the words right before the pause aren't dropped.
             if let pending = transcriber?.stop() {
-                ingest(pending)
+                ingest(pending.text, voice: pending.voice)
             }
             transcriber = nil
             micLevel = 0
@@ -335,7 +362,7 @@ final class AppModel: ObservableObject {
         // Count pending speech BEFORE teardown: stop() returns it because an
         // async onFinal delivery would arrive after the session is saved.
         if let pending = transcriber?.stop(), state == .listening {
-            ingest(pending)
+            ingest(pending.text, voice: pending.voice)
         }
         transcriber = nil
         micLevel = 0
@@ -381,6 +408,53 @@ final class AppModel: ObservableObject {
 
     func previewHUD(terms: [String], count: Int, rate: Double) {
         hud.flashFillers(terms: terms, sessionCount: count, rate: rate, target: targetRate)
+    }
+
+    // MARK: - Voice calibration ("only count my voice")
+
+    /// Ten seconds of the user reading aloud → their pitch band. Idle-only:
+    /// the calibrator and a live session would fight over the mic.
+    func startCalibration() {
+        guard state == .idle, !calibrating else { return }
+        Task { await doCalibrate() }
+    }
+
+    private func doCalibrate() async {
+        guard await SpeechAuth.requestMicAuthorization() else {
+            calibrationStatus = "Microphone access is off for Filler Killer. "
+                + "Turn it on in System Settings → Privacy & Security → Microphone."
+            return
+        }
+        let calibrator = VoiceCalibrator()
+        do {
+            try calibrator.start()
+        } catch {
+            calibrationStatus = error.localizedDescription
+            return
+        }
+        self.calibrator = calibrator
+        calibrating = true
+        for remaining in stride(from: Self.calibrationSeconds, through: 1, by: -1) {
+            calibrationStatus = "Listening — keep reading in your normal "
+                + "speaking voice… \(remaining)s"
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        }
+        let f0s = calibrator.stop()
+        self.calibrator = nil
+        calibrating = false
+        if let band = VoiceBand.calibrated(from: f0s) {
+            myVoiceF0Low = band.lowF0
+            myVoiceF0High = band.highF0
+            onlyMyVoice = true
+            calibrationStatus = "Done — your voice sits around "
+                + "\(Int(band.lowF0))–\(Int(band.highF0)) Hz."
+            logEvent("voice calibrated: \(Int(band.lowF0))–\(Int(band.highF0)) Hz "
+                + "from \(f0s.count) voiced frames")
+        } else {
+            calibrationStatus = "Didn't hear enough of your voice — try again "
+                + "somewhere quieter, a little closer to the mic."
+            logEvent("voice calibration failed: \(f0s.count) voiced frames")
+        }
     }
 
     // MARK: - Diagnostics (Settings-only)

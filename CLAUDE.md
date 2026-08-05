@@ -50,6 +50,11 @@ Other lessons from working with Dave's terminal:
   partials forever without ever sending isFinal OR a silence error — anything
   counting only finalized segments counts nothing. Fixed by the stability
   commit (PartialStabilizer, Swift + Python); don't remove it.
+- M8 "only count my voice": echo cancellation (voice processing on the input
+  node) + a calibrated pitch gate (PitchEstimator, pure Swift, Linux-tested).
+  The gate FAILS OPEN — ambiguous segments are always counted; don't "fix"
+  that. Skipped segments are logged in diagnostics with their F0. The Python
+  listener intentionally has neither (see listener.py docstring).
 
 ## Architecture pointers
 

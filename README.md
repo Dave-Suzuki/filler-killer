@@ -26,6 +26,10 @@ you lean on, so your next meeting has fewer of them. It works two ways:
 - **Safe on calls** — Zoom/Meet and Filler Killer share the mic without
   conflict, the pill is invisible to screen shares, and the menu bar count
   is hidden by default while listening so nobody sees your tally.
+- **Counts you, not your call** — echo cancellation keeps the voices coming
+  out of your speakers from being counted as yours, and an optional
+  ten-second voice calibration (Settings → My voice) skips other speakers
+  in the room whose pitch differs from yours.
 - **Honest controls** — Pause genuinely stops the microphone (no "paused
   but still listening"), and Settings has a delete-everything button.
 - **Your data stays yours** — everything lives in one local SQLite file on
@@ -97,6 +101,11 @@ There's also a **Sync Granola** button front and center.
   click any of them for the highlighted transcript.
 - **Settings** holds your goal rate, the option to show the live count in
   the menu bar, and the privacy controls (reveal or delete all data).
+- **Settings → My voice → Calibrate** reads your pitch for ten seconds and
+  turns on "Only count my voice": live sessions then skip speech whose
+  pitch sits outside your range. Best for filtering voices unlike yours
+  (a similar-pitch voice can still slip through); speaker audio from calls
+  is already removed by echo cancellation without any setup.
 
 ## What gets counted
 
@@ -126,6 +135,9 @@ behind a small interface, so a verbatim engine (e.g. Deepgram with
   history re-scores itself.
 - **Denied a permission by accident** — `tccutil reset SpeechRecognition &&
   tccutil reset Microphone`, then start a session again.
+- **Your own words aren't counted with "Only count my voice" on** —
+  recalibrate (Settings → My voice) in your normal speaking voice, or turn
+  the toggle off; diagnostics logs every skipped segment with its pitch.
 - **Version for bug reports** — Settings → Advanced (or hover the popover's
   Quit button).
 
