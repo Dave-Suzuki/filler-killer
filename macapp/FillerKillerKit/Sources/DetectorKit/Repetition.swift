@@ -2,6 +2,13 @@
 // oracle. Stutter repeats: "I I", "the the", and contraction-prefix repeats
 // like "we we're".
 
+// Punctuation between two identical tokens is a clause or sentence boundary
+// ("tried it, it worked", "That's it. It works") or a hyphenated double
+// ("fifty-fifty") — grammar, not a stutter. Mirrors _BOUNDARY_CHARS.
+private let boundaryScalars: Set<Unicode.Scalar> = [
+    ".", "!", "?", ",", ";", ":", "…", "—", "–", "-",
+]
+
 func findRepetitions(
     _ toks: [Token],
     scalars: [Unicode.Scalar],
@@ -12,9 +19,14 @@ func findRepetitions(
     while i < toks.count - 1 {
         let cur = toks[i]
         let nxt = toks[i + 1]
+        if scalars[cur.end ..< nxt.start].contains(where: { boundaryScalars.contains($0) }) {
+            i += 1
+            continue
+        }
         let exact = cur.text == nxt.text && !Wordlist.repetitionAllow.contains(cur.text)
         var prefix = false
         if cur.text != nxt.text,
+           !Wordlist.repetitionAllow.contains(cur.text),
            cur.text.unicodeScalars.count >= 2,
            nxt.text.hasPrefix(cur.text) {
             // Require a contraction continuation ("we we're"), not any prefix.

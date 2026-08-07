@@ -117,7 +117,10 @@ There's also a **Sync Granola** button front and center.
 | Stutter repeats | "I I", "the the", "we we're" | ✓ | ✓ |
 
 Heuristics keep legitimate uses out: "I'd **like** to", "looks **like**",
-"what **kind of** car", "**so** far", "very very" are not counted.
+"what **kind of** car", "**so** far", "very very" are not counted. Neither
+are grammatical doubles — "I'm sure **that that's** right", "I tried
+**it, it** worked", "…did **this this** morning" — nor any repeat with
+sentence punctuation between the words ("That's it. It works.").
 
 \* Apple's on-device recognition also drops some um/uh's — it's tuned for
 clean dictation. Everything else is caught reliably. The transcriber sits

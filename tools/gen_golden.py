@@ -67,9 +67,17 @@ TEXT_CASES = [
     ("exact_repeats", "I I think the the plan works.", True),
     ("prefix_contraction", "we we're very understanding", True),
     ("allowed_doubles", "It was very very good. No no, really.", True),
-    ("triple_repeat", "that that that", True),
+    ("triple_repeat", "go go go", True),
     ("quadruple_repeat", "go go go go", True),
     ("repeat_case_mix", "The the plan and We we're set.", True),
+    # clause-join doubles are grammar, not stutters (field report)
+    ("grammatical_that_that", "I'm sure that that's what happened.", True),
+    ("clause_double_no_punct", "when I tried it it worked", True),
+    ("clause_double_pronoun", "I met her her name is Sam", True),
+    ("boundary_comma", "When I tried it, it worked.", True),
+    ("boundary_sentence", "You did well. Well done.", True),
+    ("boundary_dash", "We shipped — shipped early.", True),
+    ("boundary_hyphen", "It was a fifty-fifty call.", True),
     # --- unicode / adversarial ---
     ("curly_apostrophe_token_split", "we we’re very understanding", True),
     ("emoji_offsets", "I \U0001f600 think, you know, it's fine.", True),

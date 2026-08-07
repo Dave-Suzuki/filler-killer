@@ -11,6 +11,8 @@ from fillerkiller.detector import wordlist
 if TYPE_CHECKING:
     from fillerkiller.detector.engine import FillerHit
 
+_BOUNDARY_CHARS = frozenset(".!?,;:…—–-")
+
 
 def find_repetitions(
     toks: list[tuple[str, int, int]],
@@ -23,12 +25,20 @@ def find_repetitions(
     i = 0
     while i < len(toks) - 1:
         cur, cur_start, cur_end = toks[i]
-        nxt, _nxt_start, nxt_end = toks[i + 1]
+        nxt, nxt_start, nxt_end = toks[i + 1]
+        # Punctuation between the tokens is a clause or sentence boundary
+        # ("tried it, it worked", "That's it. It works") or a hyphenated
+        # double ("fifty-fifty") — grammar, not a stutter.
+        if any(ch in _BOUNDARY_CHARS for ch in text[cur_end:nxt_start]):
+            i += 1
+            continue
         exact = cur == nxt and cur not in wordlist.REPETITION_ALLOW
         # Prefix repeat: "we we're", "did didn't". Require a real prefix of a
-        # contraction-like continuation, not just any shared letters.
+        # contraction-like continuation, not just any shared letters — and
+        # respect the allowlist ("that that's" is ordinary grammar).
         prefix = (
             cur != nxt
+            and cur not in wordlist.REPETITION_ALLOW
             and len(cur) >= 2
             and nxt.startswith(cur)
             and nxt[len(cur) :].startswith("'")

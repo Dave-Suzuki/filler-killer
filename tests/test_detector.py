@@ -86,9 +86,33 @@ class TestRepetition:
         assert terms("It was very very good. No no, really.") == []
 
     def test_triple_repeat_counts_once_per_pair(self):
-        # "so so so" -> pairs at (0,1); token 2 unpaired after consuming 0-1
-        hits = analyze_text("that that that")
-        assert [h.term for h in hits] == ["that that"]
+        # "go go go" -> pair at (0,1); token 2 unpaired after consuming 0-1
+        hits = analyze_text("go go go")
+        assert [h.term for h in hits] == ["go go"]
+
+    def test_grammatical_that_that_not_counted(self):
+        # Complementizer + demonstrative is ordinary English, not a stutter.
+        assert terms("I'm sure that that's what happened.") == []
+        assert terms("I think that that approach works") == []
+
+    def test_clause_double_pronouns_not_counted(self):
+        # Live transcripts carry no punctuation to mark the clause join.
+        assert terms("when I tried it it worked") == []
+        assert terms("I met her her name is Sam") == []
+        assert terms("we did this this morning") == []
+        assert terms("I was there there was nothing left") == []
+
+    def test_punctuation_boundary_not_counted(self):
+        # Any clause/sentence punctuation between the tokens kills the pair,
+        # even for words outside the allowlist.
+        assert terms("You did well. Well done.") == []
+        assert terms("We shipped — shipped early.") == []
+        assert terms("It was a fifty-fifty call.") == []
+
+    def test_true_stutters_still_counted(self):
+        assert terms("I I think it works") == ["i i"]
+        assert terms("we we're going") == ["we we're"]
+        assert terms("the the plan holds") == ["the the"]
 
 
 class TestSpans:

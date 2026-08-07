@@ -264,12 +264,6 @@
      "end": 11
     },
     {
-     "term": "like, like",
-     "category": "repetition",
-     "start": 7,
-     "end": 17
-    },
-    {
      "term": "like",
      "category": "discourse",
      "start": 13,
@@ -456,14 +450,14 @@
   },
   {
    "name": "triple_repeat",
-   "text": "that that that",
+   "text": "go go go",
    "include_vocalized": true,
    "expected_hits": [
     {
-     "term": "that that",
+     "term": "go go",
      "category": "repetition",
      "start": 0,
-     "end": 9
+     "end": 5
     }
    ]
   },
@@ -504,6 +498,48 @@
      "end": 25
     }
    ]
+  },
+  {
+   "name": "grammatical_that_that",
+   "text": "I'm sure that that's what happened.",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "clause_double_no_punct",
+   "text": "when I tried it it worked",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "clause_double_pronoun",
+   "text": "I met her her name is Sam",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "boundary_comma",
+   "text": "When I tried it, it worked.",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "boundary_sentence",
+   "text": "You did well. Well done.",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "boundary_dash",
+   "text": "We shipped — shipped early.",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "boundary_hyphen",
+   "text": "It was a fifty-fifty call.",
+   "include_vocalized": true,
+   "expected_hits": []
   },
   {
    "name": "curly_apostrophe_token_split",

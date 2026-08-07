@@ -53,5 +53,13 @@ LIKE_NEXT_BLOCK = {"to", "that", "this", "it", "them", "him", "her", "us", "you"
 # sentence-initial continuations ("So far so good").
 SO_NEXT_BLOCK = {"far", "long", "much", "many", "what", "that"}
 
-# Consecutive doubles that are usually deliberate, not stutters.
-REPETITION_ALLOW = {"very", "really", "no", "yeah", "ha", "bye", "ok", "okay"}
+# Consecutive doubles that are usually deliberate ("very very", "no no") or
+# ordinary grammar across a clause join with no punctuation to reveal it:
+# "I'm sure that that's fine", "I tried it it worked", "we did this this
+# morning", "I met her her name is Sam". Deliberate trade-off: a true "that
+# that" stutter goes uncounted — missing a rare real stutter beats flagging
+# normal speech (field report: false stutters the speaker was sure about).
+REPETITION_ALLOW = {
+    "very", "really", "no", "yeah", "ha", "bye", "ok", "okay",
+    "that", "it", "this", "there", "her",
+}
