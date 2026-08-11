@@ -98,7 +98,9 @@ There's also a **Sync Granola** button front and center.
 - **Trends** shows your rate over time (Day / 3 Days / Week / Month /
   3 Months / All) against your goal line, the change vs. the previous
   period, your favorite filler words, and every meeting and session —
-  click any of them for the highlighted transcript.
+  click any of them for the highlighted transcript. Right-click a record
+  to **remove** it: sessions delete permanently, meetings also stop
+  re-importing from Granola (undo in Settings → Privacy & data).
 - **Settings** holds your goal rate, the option to show the live count in
   the menu bar, and the privacy controls (reveal or delete all data).
 - **Settings → My voice → Calibrate** reads your pitch for ten seconds and

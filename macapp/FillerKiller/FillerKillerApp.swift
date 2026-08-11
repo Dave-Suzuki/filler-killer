@@ -204,6 +204,22 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Called after a record is removed in Trends so the popover counts match.
+    func refreshStoredCounts() {
+        savedSessions = (try? store?.savedSessionCount()) ?? savedSessions
+        importedMeetings = (try? store?.meetingCount()) ?? importedMeetings
+    }
+
+    func removedMeetingCount() -> Int {
+        (try? store?.excludedMeetingCount()) ?? 0
+    }
+
+    /// Undo all meeting removals; the probe brings them back within a sync.
+    func allowRemovedMeetingsReimport() {
+        try? store?.clearExcludedMeetings()
+        probeGranolaNow()
+    }
+
     // MARK: - Sessions
 
     func startSession() {

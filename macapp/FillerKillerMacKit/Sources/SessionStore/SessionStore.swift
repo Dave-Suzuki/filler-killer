@@ -54,6 +54,15 @@ public final class SessionStore {
                 try db.execute(sql: "ALTER TABLE meetings ADD COLUMN \(col) TEXT")
             }
         }
+        migrator.registerMigration("v4-excluded-meetings") { db in
+            try db.execute(sql: """
+            CREATE TABLE IF NOT EXISTS excluded_meetings (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL DEFAULT '',
+                excluded_at TEXT NOT NULL DEFAULT ''
+            )
+            """)
+        }
         try migrator.migrate(pool)
     }
 
@@ -137,6 +146,52 @@ public final class SessionStore {
             try Int.fetchOne(
                 db, sql: "SELECT COUNT(*) FROM live_sessions WHERE ended_at IS NOT NULL"
             ) ?? 0
+        }
+    }
+
+    // MARK: - Removing records
+
+    /// "Remove meeting": delete it AND remember the id so Granola sync never
+    /// re-imports it (a plain delete comes back on the next full sync).
+    /// Exclusions deliberately survive deleteAllData — they're a user
+    /// preference like the Settings toggles, not meeting data.
+    public func removeMeeting(id: String, title: String) throws {
+        try pool.write { db in
+            try db.execute(
+                sql: """
+                INSERT OR REPLACE INTO excluded_meetings (id, title, excluded_at)
+                VALUES (?,?,?)
+                """,
+                arguments: [id, title, ISO8601DateFormatter().string(from: Date())]
+            )
+            try db.execute(sql: "DELETE FROM meetings WHERE id = ?", arguments: [id])
+        }
+    }
+
+    /// Live sessions never re-sync from anywhere, so deleting one is final —
+    /// hits and segments cascade.
+    public func deleteLiveSession(id: Int64) throws {
+        try pool.write { db in
+            try db.execute(sql: "DELETE FROM live_sessions WHERE id = ?", arguments: [id])
+        }
+    }
+
+    public func excludedMeetingIds() throws -> Set<String> {
+        try pool.read { db in
+            Set(try String.fetchAll(db, sql: "SELECT id FROM excluded_meetings"))
+        }
+    }
+
+    public func excludedMeetingCount() throws -> Int {
+        try pool.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM excluded_meetings") ?? 0
+        }
+    }
+
+    /// Forget all removals — the meetings re-import on the next Granola sync.
+    public func clearExcludedMeetings() throws {
+        try pool.write { db in
+            try db.execute(sql: "DELETE FROM excluded_meetings")
         }
     }
 }

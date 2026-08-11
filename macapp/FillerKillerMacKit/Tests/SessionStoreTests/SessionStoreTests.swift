@@ -58,6 +58,35 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertEqual(try store.savedSessionCount(), 1)
     }
 
+    func testDeleteLiveSessionCascades() throws {
+        let store = try SessionStore(url: tempURL())
+        let recorder = LiveSessionRecorder(store: store)
+        try recorder.begin()
+        let text = "Um so I think this works"
+        try recorder.record(
+            segmentIdx: 0, text: text, at: Date(),
+            hits: analyzeText(text, utteranceIdx: 0, includeVocalized: true)
+        )
+        guard let id = try recorder.finish(
+            label: nil, wordCount: 6, fillerCount: 2, per100Words: 33.3
+        ) else {
+            return XCTFail("finish returned no id")
+        }
+        XCTAssertEqual(try store.savedSessionCount(), 1)
+
+        try store.deleteLiveSession(id: id)
+        XCTAssertEqual(try store.savedSessionCount(), 0)
+        try store.pool.read { db in
+            for table in ["live_hits", "live_segments"] {
+                let count = try Int.fetchOne(
+                    db, sql: "SELECT COUNT(*) FROM \(table) WHERE session_id = ?",
+                    arguments: [id]
+                ) ?? -1
+                XCTAssertEqual(count, 0, "\(table) rows must cascade")
+            }
+        }
+    }
+
     func testCrashMidSessionKeepsSegmentsButNotInTrends() throws {
         let url = tempURL()
         let store = try SessionStore(url: url)

@@ -76,6 +76,52 @@ final class GranolaSyncEngineTests: XCTestCase {
         }
     }
 
+    func testRemovedMeetingNeverReimports() async throws {
+        let store = try tempStore()
+        let transcript = try segments("""
+        [{"text": "Um so basically we ship it, you know.",
+          "speaker": {"source": "microphone", "attribution": "me"}}]
+        """)
+        let api = StubAPI(
+            stubs: [GranolaNoteStub(id: "n1", title: "Pratik's transition",
+                                    createdAt: "2026-07-30T10:00:00Z",
+                                    updatedAt: "2026-07-30T11:00:00Z")],
+            details: ["n1": GranolaNoteDetail(id: "n1", title: "Pratik's transition",
+                                              createdAt: "2026-07-30T10:00:00Z",
+                                              updatedAt: "2026-07-30T11:00:00Z",
+                                              transcript: transcript)]
+        )
+        let engine = GranolaSyncEngine(store: store, client: api)
+        _ = try await engine.sync()
+        XCTAssertEqual(try store.meetingCount(), 1)
+
+        try store.removeMeeting(id: "n1", title: "Pratik's transition")
+        XCTAssertEqual(try store.meetingCount(), 0)
+        let orphans = try store.pool.read { db in
+            try Int.fetchOne(
+                db, sql: "SELECT COUNT(*) FROM utterances WHERE meeting_id = 'n1'"
+            ) ?? 0
+        }
+        XCTAssertEqual(orphans, 0, "transcript must cascade with the meeting")
+
+        // The probe must not see the removed note as new (else it would
+        // trigger a pointless full sync every few minutes forever).
+        let needs = try await engine.needsSync()
+        XCTAssertFalse(needs)
+        let resync = try await engine.sync()
+        XCTAssertEqual(resync.added, 0)
+        XCTAssertEqual(resync.skipped, 1)
+        XCTAssertEqual(try store.meetingCount(), 0)
+
+        // Undo path: clearing exclusions re-imports on the next sync.
+        try store.clearExcludedMeetings()
+        let needsAfterClear = try await engine.needsSync()
+        XCTAssertTrue(needsAfterClear)
+        let restored = try await engine.sync()
+        XCTAssertEqual(restored.added, 1)
+        XCTAssertEqual(try store.meetingCount(), 1)
+    }
+
     func testSharedNoteCountsNamedSelfSpeakerNotNoteTaker() async throws {
         let store = try tempStore()
         // Someone else captured this note: their mic is "Me", Dave is named.

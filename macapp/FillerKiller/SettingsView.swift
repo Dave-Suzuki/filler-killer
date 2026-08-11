@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var confirmingDelete = false
     @State private var dataMessage = ""
+    @State private var removedMeetings = 0
 
     var body: some View {
         Form {
@@ -91,6 +92,20 @@ struct SettingsView: View {
                         confirmingDelete = true
                     }
                 }
+                if removedMeetings > 0 {
+                    HStack {
+                        Text("\(removedMeetings) removed meeting"
+                            + "\(removedMeetings == 1 ? "" : "s") won't "
+                            + "re-import from Granola.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Allow Re-import") {
+                            model.allowRemovedMeetingsReimport()
+                            removedMeetings = 0
+                        }
+                    }
+                }
                 if !dataMessage.isEmpty {
                     Text(dataMessage).font(.caption).foregroundStyle(.secondary)
                 }
@@ -104,6 +119,7 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 440)
+        .onAppear { removedMeetings = model.removedMeetingCount() }
         .confirmationDialog(
             "Delete all Filler Killer data?",
             isPresented: $confirmingDelete

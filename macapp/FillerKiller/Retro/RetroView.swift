@@ -78,6 +78,24 @@ final class RetroModel: ObservableObject {
             return (try? store.liveTranscript(sessionId: Int64(item.sourceId) ?? -1)) ?? []
         }
     }
+
+    /// Remove a record: meetings are also excluded from future Granola syncs
+    /// (a bare delete would re-import next sync); live sessions just delete.
+    func remove(_ item: RetroItem) {
+        guard let store else { return }
+        do {
+            switch item.source {
+            case .meeting:
+                try store.removeMeeting(id: item.sourceId, title: item.title)
+            case .live:
+                try store.deleteLiveSession(id: Int64(item.sourceId) ?? -1)
+            }
+            path.removeAll { $0 == item.id }
+            reload()
+        } catch {
+            loadError = error.localizedDescription
+        }
+    }
 }
 
 struct RetroView: View {
@@ -86,6 +104,7 @@ struct RetroView: View {
     @StateObject private var model: RetroModel
     @ObservedObject var app: AppModel
     @AppStorage("targetRate") private var targetRate = 3.0
+    @State private var pendingRemoval: RetroItem?
 
     init(app: AppModel) {
         self.app = app
@@ -327,6 +346,11 @@ struct RetroView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .contextMenu {
+                        Button("Remove from Filler Killer…", role: .destructive) {
+                            pendingRemoval = item
+                        }
+                    }
                     Divider()
                 }
             }
@@ -334,6 +358,28 @@ struct RetroView: View {
                 if let item = model.items.first(where: { $0.id == itemId }) {
                     TranscriptView(item: item, lines: model.transcript(for: item))
                 }
+            }
+            .confirmationDialog(
+                "Remove “\(pendingRemoval?.title ?? "")”?",
+                isPresented: Binding(
+                    get: { pendingRemoval != nil },
+                    set: { if !$0 { pendingRemoval = nil } }
+                )
+            ) {
+                Button("Remove", role: .destructive) {
+                    if let item = pendingRemoval {
+                        model.remove(item)
+                        app.refreshStoredCounts()
+                    }
+                    pendingRemoval = nil
+                }
+            } message: {
+                Text(pendingRemoval?.source == .meeting
+                    ? "Its transcript and counts come off your Trends, and it "
+                    + "won't re-import from Granola. The note itself stays in "
+                    + "Granola. Settings → Privacy & data can undo removals."
+                    : "This session's transcript and counts are deleted from "
+                    + "your Mac. This can't be undone.")
             }
         }
     }

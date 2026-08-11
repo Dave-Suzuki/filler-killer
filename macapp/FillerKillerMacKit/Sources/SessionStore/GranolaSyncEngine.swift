@@ -60,18 +60,26 @@ public final class GranolaSyncEngine {
         self.myEmail = myEmail
     }
 
-    /// Freshness probe: compares one small page of the newest note stubs
-    /// against the store. True when anything is new or updated — the caller
-    /// should then run a full sync(). Cheap enough to poll every few minutes.
-    public func needsSync(probeLimit: Int = 10) async throws -> Bool {
-        let known: [String: String?] = try await store.pool.read { db in
+    /// The store's view of the world: synced meetings (id → updated_at) and
+    /// user-removed meeting ids that must never re-import.
+    private func storedState() async throws -> (known: [String: String?], excluded: Set<String>) {
+        try await store.pool.read { db in
             var map: [String: String?] = [:]
             for row in try Row.fetchAll(db, sql: "SELECT id, updated_at FROM meetings") {
                 map[row["id"] as String] = row["updated_at"] as String?
             }
-            return map
+            let excluded = Set(try String.fetchAll(db, sql: "SELECT id FROM excluded_meetings"))
+            return (map, excluded)
         }
+    }
+
+    /// Freshness probe: compares one small page of the newest note stubs
+    /// against the store. True when anything is new or updated — the caller
+    /// should then run a full sync(). Cheap enough to poll every few minutes.
+    public func needsSync(probeLimit: Int = 10) async throws -> Bool {
+        let (known, excluded) = try await storedState()
         for stub in try await client.latestStubs(limit: probeLimit) {
+            if excluded.contains(stub.id) { continue }
             guard let existing = known[stub.id] else { return true }
             if existing != stub.updatedAt { return true }
         }
@@ -79,16 +87,15 @@ public final class GranolaSyncEngine {
     }
 
     public func sync() async throws -> GranolaSyncStats {
-        let known: [String: String?] = try await store.pool.read { db in
-            var map: [String: String?] = [:]
-            for row in try Row.fetchAll(db, sql: "SELECT id, updated_at FROM meetings") {
-                map[row["id"] as String] = row["updated_at"] as String?
-            }
-            return map
-        }
+        let (known, excluded) = try await storedState()
 
         var stats = GranolaSyncStats()
         for stub in try await client.listNotes() {
+            if excluded.contains(stub.id) {
+                // User removed this meeting in the app; never re-import.
+                stats.skipped += 1
+                continue
+            }
             if let existing = known[stub.id], existing == stub.updatedAt {
                 // Unchanged content — but backfill owner metadata (columns
                 // added after the meeting was first synced), so the
