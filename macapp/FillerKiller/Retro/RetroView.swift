@@ -320,36 +320,8 @@ struct RetroView: View {
             }
             LazyVStack(spacing: 0) {
                 ForEach(model.items) { item in
-                    NavigationLink(value: item.id) {
-                        HStack(spacing: 10) {
-                            Image(systemName: item.source == .live
-                                ? "waveform.circle.fill" : "calendar.circle.fill")
-                                .font(.system(size: 16))
-                                .foregroundStyle(item.source == .live
-                                    ? Color.accentColor : Color.secondary)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(item.title).lineLimit(1)
-                                Text(item.day).font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 1) {
-                                Text("\(item.fillers) fillers")
-                                    .font(.system(size: 13))
-                                    .monospacedDigit()
-                                Text(String(format: "%.1f / 100w", item.rate))
-                                    .font(.system(size: 11))
-                                    .monospacedDigit()
-                                    .foregroundStyle(judgment(rate: item.rate, target: targetRate))
-                            }
-                        }
-                        .padding(.vertical, 8)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button("Remove from Filler Killer…", role: .destructive) {
-                            pendingRemoval = item
-                        }
+                    RetroRow(item: item, targetRate: targetRate) {
+                        pendingRemoval = item
                     }
                     Divider()
                 }
@@ -381,6 +353,60 @@ struct RetroView: View {
                     : "This session's transcript and counts are deleted from "
                     + "your Mac. This can't be undone.")
             }
+        }
+    }
+}
+
+/// One row in "Meetings & sessions": the whole row navigates to the
+/// transcript, and a trash button appears on hover (right-click also works —
+/// but a visible affordance beats a hidden one; field request).
+private struct RetroRow: View {
+    let item: RetroItem
+    let targetRate: Double
+    let remove: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            NavigationLink(value: item.id) {
+                HStack(spacing: 10) {
+                    Image(systemName: item.source == .live
+                        ? "waveform.circle.fill" : "calendar.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(item.source == .live
+                            ? Color.accentColor : Color.secondary)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(item.title).lineLimit(1)
+                        Text(item.day).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text("\(item.fillers) fillers")
+                            .font(.system(size: 13))
+                            .monospacedDigit()
+                        Text(String(format: "%.1f / 100w", item.rate))
+                            .font(.system(size: 11))
+                            .monospacedDigit()
+                            .foregroundStyle(judgment(rate: item.rate, target: targetRate))
+                    }
+                }
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Button(action: remove) {
+                Image(systemName: "trash")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .help("Remove from Filler Killer")
+            .opacity(hovering ? 1 : 0)
+            .accessibilityLabel("Remove \(item.title)")
+        }
+        .onHover { hovering = $0 }
+        .contextMenu {
+            Button("Remove from Filler Killer…", role: .destructive, action: remove)
         }
     }
 }
