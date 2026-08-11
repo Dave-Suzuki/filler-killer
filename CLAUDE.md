@@ -2,6 +2,28 @@
 
 ## Delivering Mac app builds to Dave
 
+Two-repo era (since 2026-08-11, private-repo Actions quota exhausted):
+code lives in davesuzuki-hiya/filler-killer (CI dead there), builds run on
+the public mirror Dave-Suzuki/filler-killer, which only Dave can push to.
+STANDING RULE from Dave: every time a new build is needed or ready, give
+him the complete copy-paste command blocks unprompted — first the fk-sync
+block (below) that puts the branch on the mirror and triggers CI, then,
+once green, the full install block. Never just describe the steps or link
+a run page without the blocks.
+
+fk-sync block (mirror the branch; triggers the macapp workflow):
+
+```bash
+cd ~/Desktop
+git clone --branch claude/filler-word-detection-4mvjez https://github.com/davesuzuki-hiya/filler-killer.git fk-sync
+cd fk-sync
+git push https://github.com/Dave-Suzuki/filler-killer.git claude/filler-word-detection-4mvjez && cd ~/Desktop && rm -rf fk-sync
+```
+
+(The rule dissolves if Dave makes the original repo public or sets an
+Actions spending limit — then CI runs on the original again and no copy
+is needed.)
+
 If the build contains a `.dmg` (Developer ID secrets configured in CI),
 installation is: download, open the DMG, drag to Applications — send that,
 not a command block. For ad-hoc zip builds, EVERY time a new build is
