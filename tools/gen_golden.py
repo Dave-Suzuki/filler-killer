@@ -78,6 +78,18 @@ TEXT_CASES = [
     ("boundary_sentence", "You did well. Well done.", True),
     ("boundary_dash", "We shipped — shipped early.", True),
     ("boundary_hyphen", "It was a fifty-fifty call.", True),
+    # v3: names, intensifiers, greetings (field report from a real meeting)
+    ("proper_noun_double", "I think James James had two Rivians", True),
+    ("proper_noun_prefix", "we asked Sarah Sarah's team agreed", True),
+    ("capital_i_stutter", "and I I froze up", True),
+    ("intensifier_double", "looks pretty pretty cool", True),
+    ("greeting_double", "hello hello can you hear me", True),
+    (
+        "field_report_tu_planning",
+        "Yeah. Yeah. Yeah. I think the James James had two Rivians in a row. "
+        "Looks pretty pretty cool. Hello, Hello. Do you hear me?",
+        True,
+    ),
     # --- unicode / adversarial ---
     ("curly_apostrophe_token_split", "we we’re very understanding", True),
     ("emoji_offsets", "I \U0001f600 think, you know, it's fine.", True),

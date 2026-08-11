@@ -44,6 +44,12 @@ def find_repetitions(
             and nxt[len(cur) :].startswith("'")
         )
         if exact or prefix:
+            # Both copies capitalized mid-text is a proper noun ("James
+            # James"), not a stutter — ASR noise clusters around names.
+            # "I" is the one pronoun that's always capitalized; exempt it.
+            if cur != "i" and text[cur_start].isupper() and text[nxt_start].isupper():
+                i += 1
+                continue
             hits.append(
                 FillerHit(
                     term=text[cur_start:nxt_end].lower(),

@@ -114,6 +114,19 @@ class TestRepetition:
         assert terms("we we're going") == ["we we're"]
         assert terms("the the plan holds") == ["the the"]
 
+    def test_doubled_proper_nouns_not_counted(self):
+        assert terms("I think James James had two Rivians") == []
+        assert terms("we asked Sarah Sarah's team agreed") == []
+
+    def test_capitalized_i_still_counted(self):
+        # "I" is capitalized like a name but doubles as a real stutter.
+        assert terms("and I I froze up") == ["i i"]
+
+    def test_doubled_intensifiers_and_greetings_not_counted(self):
+        assert terms("looks pretty pretty cool") == []
+        assert terms("hello hello can you hear me") == []
+        assert terms("hey hey welcome back") == []
+
 
 class TestSpans:
     def test_char_spans_slice_back_to_source(self):

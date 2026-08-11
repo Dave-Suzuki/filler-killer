@@ -34,6 +34,15 @@ func findRepetitions(
             prefix = rest.hasPrefix("'")
         }
         if exact || prefix {
+            // Both copies capitalized mid-text is a proper noun ("James
+            // James"), not a stutter — ASR noise clusters around names.
+            // "I" is the one pronoun that's always capitalized; exempt it.
+            if cur.text != "i",
+               CharacterSet.uppercaseLetters.contains(scalars[cur.start]),
+               CharacterSet.uppercaseLetters.contains(scalars[nxt.start]) {
+                i += 1
+                continue
+            }
             hits.append(FillerHit(
                 term: scalarSubstring(scalars, cur.start, nxt.end).lowercased(),
                 category: "repetition",

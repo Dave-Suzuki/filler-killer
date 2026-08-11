@@ -9,8 +9,10 @@ import Foundation
 /// logic): stored hits were computed by the version current at analysis
 /// time, and the app re-scores its whole history once when this moves.
 /// v2: repetition clause-boundary guard + clause-join allowlist.
+/// v3: doubled proper nouns ("James James"), intensifiers ("pretty
+/// pretty"), and greetings ("hello hello") are not stutters.
 public enum DetectorInfo {
-    public static let version = 2
+    public static let version = 3
 }
 
 public struct FillerHit: Equatable, Sendable {

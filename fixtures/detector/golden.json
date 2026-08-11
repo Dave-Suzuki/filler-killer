@@ -542,6 +542,49 @@
    "expected_hits": []
   },
   {
+   "name": "proper_noun_double",
+   "text": "I think James James had two Rivians",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "proper_noun_prefix",
+   "text": "we asked Sarah Sarah's team agreed",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "capital_i_stutter",
+   "text": "and I I froze up",
+   "include_vocalized": true,
+   "expected_hits": [
+    {
+     "term": "i i",
+     "category": "repetition",
+     "start": 4,
+     "end": 7
+    }
+   ]
+  },
+  {
+   "name": "intensifier_double",
+   "text": "looks pretty pretty cool",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "greeting_double",
+   "text": "hello hello can you hear me",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
+   "name": "field_report_tu_planning",
+   "text": "Yeah. Yeah. Yeah. I think the James James had two Rivians in a row. Looks pretty pretty cool. Hello, Hello. Do you hear me?",
+   "include_vocalized": true,
+   "expected_hits": []
+  },
+  {
    "name": "curly_apostrophe_token_split",
    "text": "we we’re very understanding",
    "include_vocalized": true,

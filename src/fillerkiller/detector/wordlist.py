@@ -62,4 +62,7 @@ SO_NEXT_BLOCK = {"far", "long", "much", "many", "what", "that"}
 REPETITION_ALLOW = {
     "very", "really", "no", "yeah", "ha", "bye", "ok", "okay",
     "that", "it", "this", "there", "her",
+    # intensifiers doubled for emphasis, and greetings doubled on purpose
+    # ("hello hello, do you hear me") — field report from a real transcript
+    "pretty", "super", "hello", "hi", "hey",
 }

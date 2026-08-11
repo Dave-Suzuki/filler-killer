@@ -46,5 +46,6 @@ public enum Wordlist {
     public static let repetitionAllow: Set<String> = [
         "very", "really", "no", "yeah", "ha", "bye", "ok", "okay",
         "that", "it", "this", "there", "her",
+        "pretty", "super", "hello", "hi", "hey",
     ]
 }
