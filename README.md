@@ -116,7 +116,7 @@ There's also a **Sync Granola** button front and center.
 | Vocalized | um, uh, er | ✗ (Granola's ASR strips them) | ✓* |
 | Phrases | you know, i mean, kind of, basically, literally, actually | ✓ | ✓ |
 | Discourse | filler *like*, sentence-initial *so* | ✓ | ✓ |
-| Stutter repeats | "I I", "the the", "we we're" | ✓ | ✓ |
+| Stutter repeats | "I I", "the the", "we we're" | ✗ (Granola's ASR injects doubled words) | ✓ |
 
 Heuristics keep legitimate uses out: "I'd **like** to", "looks **like**",
 "what **kind of** car", "**so** far", "very very" are not counted. Neither

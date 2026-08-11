@@ -11,8 +11,12 @@ import Foundation
 /// v2: repetition clause-boundary guard + clause-join allowlist.
 /// v3: doubled proper nouns ("James James"), intensifiers ("pretty
 /// pretty"), and greetings ("hello hello") are not stutters.
+/// v4: repetitions no longer counted from Granola meetings at all — its
+/// ASR injects doubled words. Live sessions still count them. (The rule
+/// lives at the sync/re-score layer, but the version bump here drives
+/// the one-time history re-score.)
 public enum DetectorInfo {
-    public static let version = 3
+    public static let version = 4
 }
 
 public struct FillerHit: Equatable, Sendable {

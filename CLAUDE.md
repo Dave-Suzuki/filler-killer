@@ -72,6 +72,12 @@ Other lessons from working with Dave's terminal:
   partials forever without ever sending isFinal OR a silence error — anything
   counting only finalized segments counts nothing. Fixed by the stability
   commit (PartialStabilizer, Swift + Python); don't remove it.
+- Field lesson (b6 era): Granola's ASR INJECTS doubled words ("make make",
+  "those those", "how how") — verified against speech with no stutter. No
+  lexical allowlist can keep up, so repetitions are dropped wholesale from
+  the Granola path (sync + re-score layers, both languages), live-only now —
+  same split as vocalized, which Granola breaks the other way. Don't "fix"
+  a meeting showing zero stutters; that's the policy.
 - M8 "only count my voice": echo cancellation (voice processing on the input
   node) + a calibrated pitch gate (PitchEstimator, pure Swift, Linux-tested).
   The gate FAILS OPEN — ambiguous segments are always counted; don't "fix"

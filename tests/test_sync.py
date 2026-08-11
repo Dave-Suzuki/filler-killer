@@ -25,9 +25,16 @@ def test_full_sync_persists_meetings_and_hits(tmp_path):
         r["term"]
         for r in conn.execute("SELECT term FROM filler_hits WHERE meeting_id = 'meet-001'")
     }
-    # so (sentence-initial), you know, kind of (merged across segments),
-    # i i and we we're (stutters)
-    assert {"so", "you know", "kind of", "i i", "we we're"} <= terms
+    # so (sentence-initial), you know, kind of (merged across segments).
+    # Stutter repeats ("i i", "we we're") are deliberately NOT stored from
+    # the Granola path — its ASR injects doubled words, so repeats here are
+    # transcription noise. They still count on the live path.
+    assert {"so", "you know", "kind of"} <= terms
+    categories = {
+        r["category"]
+        for r in conn.execute("SELECT category FROM filler_hits WHERE meeting_id = 'meet-001'")
+    }
+    assert "repetition" not in categories
 
 
 def test_only_me_utterances_counted(tmp_path):

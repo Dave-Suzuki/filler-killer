@@ -76,6 +76,40 @@ final class GranolaSyncEngineTests: XCTestCase {
         }
     }
 
+    func testSyncNeverStoresRepetitions() async throws {
+        let store = try tempStore()
+        // "I I" and "the the" would be genuine stutters on the live path;
+        // from Granola they're indistinguishable from its doubled-word ASR
+        // noise, so the sync layer drops the whole category.
+        let transcript = try segments("""
+        [{"text": "I I think the the plan works, you know.",
+          "speaker": {"source": "microphone", "attribution": "me"}}]
+        """)
+        let api = StubAPI(
+            stubs: [GranolaNoteStub(id: "n1", title: "Planning",
+                                    createdAt: "2026-08-01T10:00:00Z",
+                                    updatedAt: "2026-08-01T11:00:00Z")],
+            details: ["n1": GranolaNoteDetail(id: "n1", title: "Planning",
+                                              createdAt: "2026-08-01T10:00:00Z",
+                                              updatedAt: "2026-08-01T11:00:00Z",
+                                              transcript: transcript)]
+        )
+        _ = try await GranolaSyncEngine(store: store, client: api).sync()
+        let (terms, fillerCount) = try await store.pool.read { db in
+            (
+                try Row.fetchAll(
+                    db, sql: "SELECT term, category FROM filler_hits WHERE meeting_id = 'n1'"
+                ).map { ($0["term"] as String, $0["category"] as String) },
+                try Int.fetchOne(
+                    db, sql: "SELECT filler_count FROM meetings WHERE id = 'n1'"
+                ) ?? -1
+            )
+        }
+        XCTAssertEqual(terms.map { $0.0 }, ["you know"])
+        XCTAssertFalse(terms.contains { $0.1 == "repetition" })
+        XCTAssertEqual(fillerCount, 1, "count must match the stored hits, not the raw analysis")
+    }
+
     func testRemovedMeetingNeverReimports() async throws {
         let store = try tempStore()
         let transcript = try segments("""

@@ -61,7 +61,9 @@ final class SessionStoreTests: XCTestCase {
     func testRescoreHealsStaleHits() async throws {
         let store = try SessionStore(url: tempURL())
         // A meeting scored by the OLD detector: "it it" was flagged as a
-        // stutter; today's detector says that clause join is clean.
+        // stutter. The re-scored meeting must drop it — and ALSO drop the
+        // genuine "the the": repeats never count on the Granola path (its
+        // ASR injects doubled words), only live sessions keep them.
         try await store.pool.write { db in
             try db.execute(
                 sql: """
@@ -74,7 +76,7 @@ final class SessionStoreTests: XCTestCase {
             try db.execute(
                 sql: """
                 INSERT INTO utterances (meeting_id, idx, speaker, text)
-                VALUES ('m1', 0, 'Me', 'when I tried it it worked')
+                VALUES ('m1', 0, 'Me', 'when I tried it it worked the the plan held')
                 """
             )
             try db.execute(
@@ -130,7 +132,8 @@ final class SessionStoreTests: XCTestCase {
                     ) ?? -1
                 )
             }
-        XCTAssertEqual(meetingHits, 0, "retracted 'it it' must disappear")
+        XCTAssertEqual(meetingHits, 0,
+                       "retracted 'it it' AND path-excluded 'the the' must disappear")
         XCTAssertEqual(meetingFillers, 0)
         XCTAssertEqual(sessionHits.sorted(), ["so", "um"], "bogus hit dropped, real hits kept")
         XCTAssertEqual(sessionFillers, 2)

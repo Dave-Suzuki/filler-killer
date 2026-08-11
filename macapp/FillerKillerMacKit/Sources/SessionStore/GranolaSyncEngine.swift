@@ -140,7 +140,12 @@ public final class GranolaSyncEngine {
             utterances, myNames: myNames, myEmail: myEmail,
             ownerEmail: ownerEmail, ownerName: ownerName
         )
-        let result = analyzeUtterances(utterances, speaker: speaker, includeVocalized: false)
+        var result = analyzeUtterances(utterances, speaker: speaker, includeVocalized: false)
+        // Granola's ASR injects doubled words ("make make", "those those" —
+        // field-verified), so repeats from this path are transcription
+        // noise, not stutters. Counted on the live path only — same policy
+        // as vocalized, which Granola breaks in the other direction.
+        result.hits.removeAll { $0.category == "repetition" }
         let formatter = ISO8601DateFormatter()
         let now = formatter.string(from: Date())
         try store.pool.write { db in
@@ -201,9 +206,10 @@ public final class GranolaSyncEngine {
                     ownerEmail: row["owner_email"], ownerName: row["owner_name"]
                 )
                 guard speaker != stored else { continue }
-                let result = analyzeUtterances(
+                var result = analyzeUtterances(
                     utterances, speaker: speaker, includeVocalized: false
                 )
+                result.hits.removeAll { $0.category == "repetition" }
                 try db.execute(
                     sql: """
                     UPDATE meetings SET word_count = ?, filler_count = ?,

@@ -218,9 +218,13 @@ public final class SessionStore {
                     arguments: [meetingId]
                 ).map { Utterance(speaker: $0["speaker"], text: $0["text"]) }
                 guard !utterances.isEmpty else { continue }
-                let result = analyzeUtterances(
+                var result = analyzeUtterances(
                     utterances, speaker: speaker, includeVocalized: false
                 )
+                // Meeting path: repeats are Granola transcription noise
+                // (see GranolaSyncEngine.storeMeeting); live sessions below
+                // keep them.
+                result.hits.removeAll { $0.category == "repetition" }
                 try db.execute(
                     sql: "DELETE FROM filler_hits WHERE meeting_id = ?",
                     arguments: [meetingId]

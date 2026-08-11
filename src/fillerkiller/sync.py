@@ -93,6 +93,12 @@ def _analyze_and_store_counts(
     # speaker == "" matches no utterance: zero counts, meeting hidden from
     # trends (queries filter word_count > 0) but transcript stays browsable.
     result = analyze_utterances(utterances, speaker=speaker, include_vocalized=False)
+    # Granola's ASR is untrustworthy for disfluency in BOTH directions: it
+    # strips real um/uhs (why vocalized is off here) and it also injects
+    # doubled words ("make make", "those those", "how how" — field-verified
+    # against speech the speaker never stuttered). Repeats from this path
+    # are transcription noise; stutters are counted on the live path only.
+    result.hits = [h for h in result.hits if h.category != "repetition"]
     conn.execute("DELETE FROM filler_hits WHERE meeting_id = ?", (meeting_id,))
     conn.executemany(
         "INSERT INTO filler_hits (meeting_id, utterance_idx, term, category, start, end)"
