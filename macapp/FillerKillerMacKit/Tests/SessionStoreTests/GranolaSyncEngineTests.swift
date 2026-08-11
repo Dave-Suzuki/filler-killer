@@ -97,7 +97,7 @@ final class GranolaSyncEngineTests: XCTestCase {
 
         try store.removeMeeting(id: "n1", title: "Pratik's transition")
         XCTAssertEqual(try store.meetingCount(), 0)
-        let orphans = try store.pool.read { db in
+        let orphans = try await store.pool.read { db in
             try Int.fetchOne(
                 db, sql: "SELECT COUNT(*) FROM utterances WHERE meeting_id = 'n1'"
             ) ?? 0
