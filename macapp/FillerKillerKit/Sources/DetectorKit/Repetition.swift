@@ -38,8 +38,8 @@ func findRepetitions(
             // James"), not a stutter — ASR noise clusters around names.
             // "I" is the one pronoun that's always capitalized; exempt it.
             if cur.text != "i",
-               CharacterSet.uppercaseLetters.contains(scalars[cur.start]),
-               CharacterSet.uppercaseLetters.contains(scalars[nxt.start]) {
+               scalars[cur.start].properties.isUppercase,
+               scalars[nxt.start].properties.isUppercase {
                 i += 1
                 continue
             }
