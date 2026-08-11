@@ -26,10 +26,11 @@ you lean on, so your next meeting has fewer of them. It works two ways:
 - **Safe on calls** — Zoom/Meet and Filler Killer share the mic without
   conflict, the pill is invisible to screen shares, and the menu bar count
   is hidden by default while listening so nobody sees your tally.
-- **Counts you, not your call** — echo cancellation keeps the voices coming
-  out of your speakers from being counted as yours, and an optional
-  ten-second voice calibration (Settings → My voice) skips other speakers
-  in the room whose pitch differs from yours.
+- **Counts you, not your call** — a ten-second voice calibration
+  (Settings → My voice) skips other speakers whose pitch differs from
+  yours; wear a headset and remote voices barely reach the mic at all.
+  Optional echo cancellation can subtract speaker audio too, though it
+  can interfere with call audio on some Macs (off by default).
 - **Honest controls** — Pause genuinely stops the microphone (no "paused
   but still listening"), and Settings has a delete-everything button.
 - **Your data stays yours** — everything lives in one local SQLite file on
@@ -106,8 +107,9 @@ There's also a **Sync Granola** button front and center.
 - **Settings → My voice → Calibrate** reads your pitch for ten seconds and
   turns on "Only count my voice": live sessions then skip speech whose
   pitch sits outside your range. Best for filtering voices unlike yours
-  (a similar-pitch voice can still slip through); speaker audio from calls
-  is already removed by echo cancellation without any setup.
+  (a similar-pitch voice can still slip through). For calls, a headset
+  keeps remote voices off the mic; the optional echo-cancellation toggle
+  does it on speakers, at the risk of disturbing call audio on some Macs.
 
 ## What gets counted
 
@@ -143,6 +145,10 @@ behind a small interface, so a verbatim engine (e.g. Deepgram with
 - **Your own words aren't counted with "Only count my voice" on** —
   recalibrate (Settings → My voice) in your normal speaking voice, or turn
   the toggle off; diagnostics logs every skipped segment with its pitch.
+- **Call audio cuts out or garbles when a session starts** — turn off
+  Settings → My voice → Echo cancellation (it reconfigures the Mac's
+  shared audio path, which some hardware and conferencing apps handle
+  badly), and use a headset instead.
 - **Version for bug reports** — Settings → Advanced (or hover the popover's
   Quit button).
 

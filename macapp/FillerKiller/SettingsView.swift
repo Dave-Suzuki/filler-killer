@@ -38,6 +38,15 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             Section("My voice") {
+                Toggle("Echo cancellation", isOn: $model.echoCancellation)
+                    .disabled(model.state != .idle)
+                Text("Subtracts your speakers' audio from the mic so remote "
+                    + "voices aren't counted — but on some Macs it cuts or "
+                    + "mutes other apps' sound during calls. Leave it off if "
+                    + "Zoom audio breaks when a session starts; a headset "
+                    + "solves the same problem reliably.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Toggle("Only count my voice", isOn: $model.onlyMyVoice)
                     .disabled(model.myVoiceBand == nil)
                 HStack {
@@ -62,8 +71,8 @@ struct SettingsView: View {
                     + "then skip speech that sits outside your range. Works "
                     + "best when the other voices around you are higher or "
                     + "lower than yours — a similar-pitch voice can still be "
-                    + "counted. Speaker audio is already filtered out by echo "
-                    + "cancellation either way.")
+                    + "counted. Recalibrate if you switch to a very "
+                    + "different microphone.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

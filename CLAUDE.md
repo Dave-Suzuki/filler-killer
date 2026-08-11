@@ -83,6 +83,11 @@ Other lessons from working with Dave's terminal:
   The gate FAILS OPEN — ambiguous segments are always counted; don't "fix"
   that. Skipped segments are logged in diagnostics with their F0. The Python
   listener intentionally has neither (see listener.py docstring).
+- Field lesson (b7 era): echo cancellation CUT ZOOM CALL AUDIO on Dave's Mac
+  and starved recognition (no fillers caught) — enabling the voice-processing
+  unit reconfigures shared audio hardware while the conferencing app holds
+  the mic. AEC is opt-in (Settings → My voice, default OFF) — never make it
+  automatic again; a headset is the recommended call setup.
 
 ## Architecture pointers
 

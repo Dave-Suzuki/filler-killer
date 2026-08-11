@@ -94,6 +94,10 @@ final class AppModel: ObservableObject {
     // Detector version whose hits are stored in the local database; when the
     // shipped detector moves past it, history is re-scored once at launch.
     @AppStorage("lastDetectorVersion") var lastDetectorVersion = 1
+    // Echo cancellation (Apple voice processing). OFF by default: with a
+    // conferencing app holding the mic it can duck or cut the call's audio
+    // and starve recognition (field report from a Zoom call).
+    @AppStorage("echoCancellation") var echoCancellation = false
     // "Only count my voice": segments whose median pitch falls outside the
     // calibrated band are dropped before counting. Off until calibrated.
     @AppStorage("onlyMyVoice") var onlyMyVoice = false
@@ -293,7 +297,10 @@ final class AppModel: ObservableObject {
     @discardableResult
     private func startEngine() -> Bool {
         do {
-            let transcriber = try SpeechTranscriber(allowServer: allowServerRecognition)
+            let transcriber = try SpeechTranscriber(
+                allowServer: allowServerRecognition,
+                useVoiceProcessing: echoCancellation
+            )
             transcriber.onFinal = { [weak self] text, voice in
                 DispatchQueue.main.async { self?.ingest(text, voice: voice) }
             }
@@ -466,7 +473,7 @@ final class AppModel: ObservableObject {
                 + "Turn it on in System Settings → Privacy & Security → Microphone."
             return
         }
-        let calibrator = VoiceCalibrator()
+        let calibrator = VoiceCalibrator(useVoiceProcessing: echoCancellation)
         do {
             try calibrator.start()
         } catch {

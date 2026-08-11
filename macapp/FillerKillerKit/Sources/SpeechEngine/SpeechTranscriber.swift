@@ -107,13 +107,23 @@ public final class SpeechTranscriber: @unchecked Sendable {
         }
     }
 
+    private let useVoiceProcessing: Bool
+
     /// `allowServer` must reflect an EXPLICIT user consent stored by the app.
     /// Without it, the engine refuses to run when the on-device model is
     /// missing rather than silently sending audio to Apple.
+    ///
+    /// `useVoiceProcessing` (echo cancellation) is OFF by default: enabling
+    /// Apple's voice-processing unit reconfigures the shared audio hardware,
+    /// and with a conferencing app holding the mic it can duck or CUT the
+    /// call's audio and degrade what recognition hears (field report from a
+    /// Zoom call). Opt-in via Settings only.
     public init(
         locale: Locale = Locale(identifier: "en-US"),
-        allowServer: Bool = false
+        allowServer: Bool = false,
+        useVoiceProcessing: Bool = false
     ) throws {
+        self.useVoiceProcessing = useVoiceProcessing
         guard let recognizer = SFSpeechRecognizer(locale: locale),
               recognizer.isAvailable
         else {
@@ -135,15 +145,17 @@ public final class SpeechTranscriber: @unchecked Sendable {
         // becomes eligible for the user-selectable Voice Isolation mic mode
         // (Control Center). Must happen before the tap: it changes the input
         // format. Fail-open: a session must never be blocked on it.
-        do {
-            try engine.inputNode.setVoiceProcessingEnabled(true)
-            engine.inputNode.voiceProcessingOtherAudioDuckingConfiguration =
-                AVAudioVoiceProcessingOtherAudioDuckingConfiguration(
-                    enableAdvancedDucking: false, duckingLevel: .min
-                )
-            emit("echo cancellation on (speaker audio subtracted from mic)")
-        } catch {
-            emit("echo cancellation unavailable: \(error.localizedDescription.prefix(60))")
+        if useVoiceProcessing {
+            do {
+                try engine.inputNode.setVoiceProcessingEnabled(true)
+                engine.inputNode.voiceProcessingOtherAudioDuckingConfiguration =
+                    AVAudioVoiceProcessingOtherAudioDuckingConfiguration(
+                        enableAdvancedDucking: false, duckingLevel: .min
+                    )
+                emit("echo cancellation on (speaker audio subtracted from mic)")
+            } catch {
+                emit("echo cancellation unavailable: \(error.localizedDescription.prefix(60))")
+            }
         }
         installTap()
         startRequest()
@@ -419,11 +431,18 @@ public final class VoiceCalibrator: @unchecked Sendable {
     private let engine = AVAudioEngine()
     private let lock = NSLock()
     private var pitch = PitchEstimator(sampleRate: 48000)
+    private let useVoiceProcessing: Bool
 
-    public init() {}
+    /// Match the session's audio path so the calibrated band reflects the
+    /// same processing sessions will use.
+    public init(useVoiceProcessing: Bool = false) {
+        self.useVoiceProcessing = useVoiceProcessing
+    }
 
     public func start() throws {
-        try? engine.inputNode.setVoiceProcessingEnabled(true)
+        if useVoiceProcessing {
+            try? engine.inputNode.setVoiceProcessingEnabled(true)
+        }
         let node = engine.inputNode
         let format = node.outputFormat(forBus: 0)
         lock.lock()
