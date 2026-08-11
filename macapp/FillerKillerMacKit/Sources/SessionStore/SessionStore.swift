@@ -2,6 +2,7 @@
 // src/fillerkiller/store/db.py, so the Python tool's fk.db imports as a plain
 // file copy and both implementations stay queryable by the same SQL.
 
+import DetectorKit
 import Foundation
 import GRDB
 
@@ -192,6 +193,108 @@ public final class SessionStore {
     public func clearExcludedMeetings() throws {
         try pool.write { db in
             try db.execute(sql: "DELETE FROM excluded_meetings")
+        }
+    }
+
+    // MARK: - Detector-version re-score
+
+    /// Recompute every stored meeting's and session's hits with the CURRENT
+    /// detector. Stored hits are snapshots of whatever the detector said at
+    /// analysis time — without this, detector fixes (e.g. the repetition
+    /// false-positive fix) never reach history and Trends keeps showing
+    /// retracted hits. Transcripts are the source of truth: meetings re-run
+    /// vocalized-excluded (Granola path), live sessions vocalized-included,
+    /// exactly like their original analyses.
+    public func rescoreAll() async throws -> (meetings: Int, sessions: Int) {
+        try await pool.write { db in
+            var rescoredMeetings = 0
+            let meetings = try Row.fetchAll(db, sql: "SELECT id, self_speaker FROM meetings")
+            for row in meetings {
+                let meetingId: String = row["id"]
+                let speaker: String = row["self_speaker"]
+                let utterances = try Row.fetchAll(
+                    db,
+                    sql: "SELECT speaker, text FROM utterances WHERE meeting_id = ? ORDER BY idx",
+                    arguments: [meetingId]
+                ).map { Utterance(speaker: $0["speaker"], text: $0["text"]) }
+                guard !utterances.isEmpty else { continue }
+                let result = analyzeUtterances(
+                    utterances, speaker: speaker, includeVocalized: false
+                )
+                try db.execute(
+                    sql: "DELETE FROM filler_hits WHERE meeting_id = ?",
+                    arguments: [meetingId]
+                )
+                for hit in result.hits {
+                    try db.execute(
+                        sql: """
+                        INSERT INTO filler_hits (meeting_id, utterance_idx, term, category, start, "end")
+                        VALUES (?,?,?,?,?,?)
+                        """,
+                        arguments: [meetingId, hit.utteranceIdx, hit.term,
+                                    hit.category, hit.start, hit.end]
+                    )
+                }
+                try db.execute(
+                    sql: """
+                    UPDATE meetings SET word_count = ?, filler_count = ?, per_100_words = ?
+                    WHERE id = ?
+                    """,
+                    arguments: [result.wordCount, result.fillerCount,
+                                result.per100Words, meetingId]
+                )
+                rescoredMeetings += 1
+            }
+
+            var rescoredSessions = 0
+            let sessions = try Row.fetchAll(db, sql: "SELECT id FROM live_sessions")
+            for row in sessions {
+                let sessionId: Int64 = row["id"]
+                let segments = try Row.fetchAll(
+                    db,
+                    sql: "SELECT idx, at, text FROM live_segments WHERE session_id = ? ORDER BY idx",
+                    arguments: [sessionId]
+                )
+                guard !segments.isEmpty else { continue }
+                try db.execute(
+                    sql: "DELETE FROM live_hits WHERE session_id = ?",
+                    arguments: [sessionId]
+                )
+                var fillers = 0
+                var words = 0
+                for segment in segments {
+                    let idx: Int = segment["idx"]
+                    let at: String = segment["at"]
+                    let text: String = segment["text"]
+                    let hits = analyzeText(text, utteranceIdx: idx, includeVocalized: true)
+                    words += wordCount(text)
+                    fillers += hits.count
+                    for hit in hits {
+                        try db.execute(
+                            sql: """
+                            INSERT INTO live_hits (session_id, term, category, at, segment_idx, start, "end")
+                            VALUES (?,?,?,?,?,?,?)
+                            """,
+                            arguments: [sessionId, hit.term, hit.category, at,
+                                        idx, hit.start, hit.end]
+                        )
+                    }
+                }
+                // Same round-half-to-even as LiveSessionCounter.per100Words.
+                let rate = words > 0
+                    ? (100.0 * Double(fillers) / Double(words) * 100)
+                        .rounded(.toNearestOrEven) / 100
+                    : 0.0
+                try db.execute(
+                    sql: """
+                    UPDATE live_sessions SET word_count = ?, filler_count = ?, per_100_words = ?
+                    WHERE id = ?
+                    """,
+                    arguments: [words, fillers, rate, sessionId]
+                )
+                rescoredSessions += 1
+            }
+            return (rescoredMeetings, rescoredSessions)
         }
     }
 }

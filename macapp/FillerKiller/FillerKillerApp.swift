@@ -3,6 +3,7 @@
 // privacy-consented recognition, discreet mode, onboarding, microcopy.
 
 import AppKit
+import DetectorKit
 import SessionKit
 import SessionStore
 import SpeechEngine
@@ -90,6 +91,9 @@ final class AppModel: ObservableObject {
     @AppStorage("showCountWhileListening") var showCountWhileListening = false
     @AppStorage("allowServerRecognition") var allowServerRecognition = false
     @AppStorage("onboarded") var onboarded = false
+    // Detector version whose hits are stored in the local database; when the
+    // shipped detector moves past it, history is re-scored once at launch.
+    @AppStorage("lastDetectorVersion") var lastDetectorVersion = 1
     // "Only count my voice": segments whose median pitch falls outside the
     // calibrated band are dropped before counting. Off until calibrated.
     @AppStorage("onlyMyVoice") var onlyMyVoice = false
@@ -160,9 +164,30 @@ final class AppModel: ObservableObject {
 
     init() {
         openStore()
+        rescoreIfDetectorChanged()
         startGranolaSchedule()
         DispatchQueue.main.async { [weak self] in
             self?.showOnboardingIfNeeded()
+        }
+    }
+
+    /// Detector fixes only apply to NEW analyses; stored hits are snapshots.
+    /// One-time re-score of all history whenever the detector version moves,
+    /// so retracted false positives (e.g. "it it" clause joins) disappear
+    /// from Trends too. On failure the version stays put and this retries
+    /// next launch.
+    private func rescoreIfDetectorChanged() {
+        guard let store, lastDetectorVersion != DetectorInfo.version else { return }
+        Task {
+            do {
+                let counts = try await store.rescoreAll()
+                self.lastDetectorVersion = DetectorInfo.version
+                self.logEvent("re-scored history with detector v\(DetectorInfo.version): "
+                    + "\(counts.meetings) meetings, \(counts.sessions) sessions")
+                self.refreshStoredCounts()
+            } catch {
+                self.logEvent("history re-score failed: \(error)")
+            }
         }
     }
 

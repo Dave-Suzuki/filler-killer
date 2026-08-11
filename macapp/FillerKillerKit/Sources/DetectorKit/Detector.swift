@@ -5,6 +5,14 @@
 
 import Foundation
 
+/// Bump when detection RULES change (wordlists, heuristics, repetition
+/// logic): stored hits were computed by the version current at analysis
+/// time, and the app re-scores its whole history once when this moves.
+/// v2: repetition clause-boundary guard + clause-join allowlist.
+public enum DetectorInfo {
+    public static let version = 2
+}
+
 public struct FillerHit: Equatable, Sendable {
     public let term: String
     public let category: String // vocalized | phrase | discourse | repetition
